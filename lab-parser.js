@@ -1,5 +1,5 @@
 /*
- * LabScan parser v5
+ * LabScan parser v6
  * Parser universal orientado a OCR.
  *
  * Cambios principales:
@@ -155,7 +155,7 @@
       /\bHCM\b/,
       /\bMCH\b/,
     ]),
-    lab('Biometría Hemática', 'PLAQUETAS', 'Pla', [/PLAQUETAS?/, /\bPLT\b/]),
+    lab('Biometría Hemática', 'PLAQUETAS', 'Pla', [/\bPLAQUETAS?\b/, /\bPLT\b/]),
     lab('Biometría Hemática', 'VOLUMEN PLAQUETAR MEDIO', 'VPM', [
       /VOLUMEN\s+PLAQUETAR(?:IO)?\s+MEDIO/,
       /\bVPM\b/,
@@ -530,6 +530,19 @@
 
       const tail = cleanTail(row.text.slice(match.index + match[0].length));
       if (!tail) return { matched: true, measurement: null };
+
+      // v6: si la app hizo una segunda lectura exclusiva de la columna RESULTADO,
+      // ese dato tiene prioridad sobre el OCR general de la fila. Así evitamos
+      // que 91.2 termine como 921 o que se tome un número del rango de referencia.
+      const refinedIndex = tail.indexOf('§RESULT§');
+      if (refinedIndex >= 0) {
+        const refinedTail = cleanTail(tail.slice(refinedIndex + '§RESULT§'.length));
+        const refined = extractMeasurement(refinedTail, def);
+        if (refined) {
+          refined.quality = Math.max(9, (refined.quality || 1) + 4);
+          return { matched: true, measurement: refined };
+        }
+      }
 
       const measurement = extractMeasurement(tail, def);
       return { matched: true, measurement };

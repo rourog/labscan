@@ -1,31 +1,70 @@
-# LabScan by Rourog — v5
+# LabScan v8 — GitHub Pages + Firebase Realtime Database
 
-MVP estático para GitHub Pages.
+Frontend: `https://rourog.github.io/labscan/`
 
 ## Flujo
 
-1. Tomar una foto o subir una imagen.
-2. `Analizar datos`.
-3. El resultado formateado aparece en el cuadro de texto.
+1. La PC abre `https://rourog.github.io/labscan/`.
+2. Firebase autentica la PC de forma anónima y crea una sesión aleatoria de 30 minutos.
+3. La página genera un QR que apunta a `https://rourog.github.io/labscan/?session=...`.
+4. El teléfono escanea el QR, abre la misma web y reclama esa sesión.
+5. El teléfono realiza fotografía → OCR → parser local.
+6. Solo el texto ya formateado se escribe en Realtime Database.
+7. La PC escucha su sesión con `onValue()` y muestra el resultado inmediatamente.
 
-## Cambios de v5
+Las fotografías NO se escriben en Firebase.
 
-- OCR con salida TSV para conservar la posición de las palabras.
-- Reconstrucción de las filas `ESTUDIO | RESULTADO | REFERENCIA` antes de interpretar los datos.
-- El parser prioriza el valor asociado a la unidad del estudio en vez del primer número encontrado.
-- Se conservan puntos decimales y se muestran unidades.
-- Compatibilidad ampliada con RASOMA y el formato previo del Hospital Regional.
-- Diferenciación de recuentos absolutos y porcentajes en la biometría.
-- Correcciones para `CLORURO`, AST/TGO, ALT/TGP, Grupo/Rh y variantes frecuentes de OCR.
-- Se eliminó el aumento artificial de contraste para no perder puntos decimales y caracteres finos.
-- Las imágenes de baja resolución se amplían antes del OCR.
-- Los recursos locales usan `?v=5` para evitar que GitHub Pages reutilice JavaScript antiguo desde caché.
+## Configuración Firebase requerida
 
-## Archivos
+### 1. Authentication
 
-- `index.html`: interfaz.
-- `styles.css`: interfaz minimalista.
-- `app.js`: captura/subida, OCR y reconstrucción espacial de tablas.
-- `lab-parser.js`: intérprete universal de laboratorios.
+Firebase Console → Security → Authentication → Sign-in method → Anonymous → Enable.
 
-No requiere Node, build ni backend.
+### 2. Dominio autorizado
+
+Firebase Console → Security → Authentication → Settings → Authorized domains.
+
+Añadir, si no aparece:
+
+`rourog.github.io`
+
+### 3. Realtime Database Rules
+
+Firebase Console → Realtime Database → Rules.
+
+Sustituir todo por el contenido de `database.rules.json` y pulsar Publish.
+
+Las reglas hacen lo siguiente:
+
+- La raíz permanece cerrada.
+- Crear una sesión exige Authentication.
+- Solo el UID de la PC puede crear/borrar su sesión.
+- El primer teléfono que conoce el ID aleatorio puede registrar `mobileUid`.
+- Después de vincularse, un UID distinto no puede reemplazar al teléfono.
+- Solo PC y teléfono vinculados pueden leer la sesión.
+- El teléfono no puede cambiar `ownerUid`, `createdAt` ni `expiresAt`.
+- Las sesiones solo son legibles/escribibles hasta su vencimiento.
+- No se permiten campos arbitrarios.
+
+## Publicar en GitHub Pages
+
+Subir el contenido de esta carpeta a la raíz del repositorio `rourog/labscan` y dejar GitHub Pages publicando esa rama/carpeta.
+
+No necesitas Firebase Hosting, npm ni un proceso de build.
+
+## Prueba mínima
+
+1. Abre la URL en PC.
+2. Debe aparecer un QR y `Escanea el QR con el teléfono`.
+3. Escanea el QR.
+4. En PC debe cambiar a `Teléfono vinculado`.
+5. En móvil toma/sube una hoja y pulsa `Analizar datos`.
+6. Al terminar debe decir `Enviado al PC`.
+7. La salida debe aparecer en el textarea de la PC.
+
+## Si falla
+
+- `La autenticación anónima no está habilitada`: activar Anonymous.
+- `Este dominio no está autorizado`: añadir `rourog.github.io` a Authorized domains.
+- `Firebase rechazó el acceso`: publicar `database.rules.json` en Realtime Database Rules.
+- El QR abre una versión anterior: hacer recarga forzada / limpiar caché de GitHub Pages.

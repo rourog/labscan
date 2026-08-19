@@ -9,7 +9,6 @@
 }
 
 * { box-sizing: border-box; }
-
 html, body { min-height: 100%; }
 
 body {
@@ -40,6 +39,45 @@ h1 span {
   font-size: .55em;
   font-weight: 500;
   letter-spacing: 0;
+}
+
+.view[hidden] { display: none !important; }
+
+.pairing {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  margin: 2px 0 22px;
+}
+
+.qr {
+  width: 244px;
+  min-height: 244px;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.qr img,
+.qr canvas {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+}
+
+.status {
+  min-height: 20px;
+  margin: 0;
+  color: var(--muted);
+  text-align: center;
+  font-size: .9rem;
+}
+
+.mobile-status {
+  margin: -12px 0 18px;
+  text-align: left;
 }
 
 .actions {
@@ -78,6 +116,11 @@ button:disabled {
   color: var(--bg);
 }
 
+.secondary-button {
+  margin-top: 10px;
+  min-height: 48px;
+}
+
 .file-input {
   position: fixed;
   width: 1px;
@@ -106,6 +149,20 @@ textarea {
 textarea:focus { border-color: #505050; }
 textarea::placeholder { color: #555; }
 
+.config-error {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: #bbb;
+  line-height: 1.5;
+}
+
+.config-error p { margin: 0 0 10px; }
+.config-error p:last-child { margin-bottom: 0; }
+code { color: var(--text); }
+
 @media (min-width: 700px) {
   .app { padding-top: 56px; }
+  #desktopView textarea { min-height: 320px; }
 }

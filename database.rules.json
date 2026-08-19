@@ -1,0 +1,37 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "sessions": {
+      "$sessionId": {
+        ".read": "auth != null && data.exists() && data.child('expiresAt').val() > now && (data.child('ownerUid').val() === auth.uid || data.child('mobileUid').val() === auth.uid)",
+        ".write": "auth != null && ((!data.exists() && newData.exists() && newData.child('ownerUid').val() === auth.uid && !newData.child('mobileUid').exists() && newData.child('createdAt').isNumber() && newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 3600000) || (data.exists() && data.child('ownerUid').val() === auth.uid && !newData.exists()) || (data.exists() && data.child('expiresAt').val() > now && newData.exists() && newData.child('ownerUid').val() === data.child('ownerUid').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('expiresAt').val() === data.child('expiresAt').val() && newData.child('mobileUid').val() === auth.uid && ((!data.child('mobileUid').exists()) || data.child('mobileUid').val() === auth.uid)))",
+        ".validate": "!newData.exists() || (newData.hasChildren(['ownerUid','createdAt','expiresAt','status','updatedAt']) && newData.child('expiresAt').val() > newData.child('createdAt').val())",
+        "ownerUid": {
+          ".validate": "newData.isString()"
+        },
+        "mobileUid": {
+          ".validate": "newData.isString()"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "expiresAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "status": {
+          ".validate": "newData.isString() && (newData.val() === 'waiting' || newData.val() === 'linked' || newData.val() === 'result')"
+        },
+        "formattedText": {
+          ".validate": "newData.isString()"
+        },
+        "updatedAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}
