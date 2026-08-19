@@ -1,32 +1,36 @@
-# LabScan MVP
+# LabScan by Rourog — v4
 
-Web estática para fotografiar o subir hojas de laboratorio desde el móvil, extraer texto mediante OCR y formatearlo con la lógica del extractor de laboratorios usado en ECI.
+MVP estático para GitHub Pages.
 
-## Interfaz
+## Flujo
 
-La interfaz se redujo al flujo principal:
+1. **Tomar una foto** o **Subir archivo**.
+2. Se pueden acumular varias imágenes del mismo laboratorio.
+3. Pulsar **Analizar datos**.
+4. Tesseract.js ejecuta OCR en el navegador.
+5. El parser universal normaliza los nombres y presenta los datos procesados.
 
-1. **Tomar foto** — abre la cámara trasera en dispositivos compatibles y agrega una imagen al lote.
-2. **Subir un archivo** — permite seleccionar una o varias imágenes y agregarlas al mismo lote.
-3. **Copiar y dar formato** — muestra un contador con el número de imágenes pendientes, ejecuta OCR sobre todas, interpreta los laboratorios, presenta el texto formateado y trata de copiarlo al portapapeles.
+## Cambios v4
 
-El cuadro de texto del resultado permanece oculto hasta que se procesa el lote.
+- El parser ya no depende de que el documento use los encabezados del Hospital Regional.
+- Añade variantes observadas en **Laboratorios RASOMA**.
+- Reconoce, entre otras, estas equivalencias:
+  - `CLORURO` → `Cl`
+  - `ASPARTATO AMINOTRANSFERASA TGO` / `AST` → `TGO`
+  - `ALANINA AMINOTRANSFERASA TGP` / `ALT` → `TGP`
+  - `GRUPO SANGUÍNEO Y FACTOR Rh` → `Grupo/RH`
+  - `VOLUMEN PLAQUETARIO MEDIO` → `VPM`
+- Diferencia `NEUTRÓFILOS %` de `NEUTRÓFILOS #` (y equivalentes de linfocitos/monocitos/eosinófilos/basófilos).
+- Los encabezados sirven como contexto, pero los analitos se buscan globalmente.
+- El bloque de EGO se aísla del resto para evitar confundir glucosa, hemoglobina, eritrocitos o leucocitos urinarios con sangre.
 
-## GitHub Pages
+## Publicación
 
-No requiere Node, compilación ni backend. Copia estos archivos a un repositorio y habilita GitHub Pages desde la rama principal.
+Sube estos archivos al mismo directorio del repositorio y activa GitHub Pages:
 
-## Archivos
+- `index.html`
+- `styles.css`
+- `app.js`
+- `lab-parser.js`
 
-- `index.html`: interfaz.
-- `styles.css`: diseño móvil.
-- `app.js`: captura/subida, cola de imágenes, OCR y portapapeles.
-- `lab-parser.js`: parser/normalizador de laboratorios.
-
-## Privacidad
-
-Las imágenes se procesan en el navegador. Esta versión no implementa un servidor propio ni persiste las fotografías.
-
-## Nota
-
-Tesseract.js se carga desde CDN, por lo que la primera carga necesita acceso a internet. El OCR real debe validarse con los formatos de laboratorio usados en producción.
+No requiere build, Node ni backend.

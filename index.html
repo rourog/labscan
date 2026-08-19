@@ -1,63 +1,33 @@
 <!doctype html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0d10" />
-  <title>LabScan</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>LabScan by Rourog</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="app-shell">
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">OCR de laboratorios</p>
-        <h1>LabScan</h1>
-      </div>
-      <span class="status-dot" id="engineStatus" title="Estado del OCR" aria-label="Estado del OCR"></span>
-    </header>
+  <main class="app">
+    <h1>LabScan <span>by Rourog</span></h1>
 
-    <section class="controls" aria-label="Acciones">
-      <button class="action-button" id="cameraButton" type="button">
-        <span class="button-icon" aria-hidden="true">⌁</span>
-        <span>Tomar foto</span>
-      </button>
-
-      <button class="action-button" id="uploadButton" type="button">
-        <span class="button-icon" aria-hidden="true">↑</span>
-        <span>Subir un archivo</span>
-      </button>
-
-      <button class="action-button primary" id="processButton" type="button" disabled>
-        <span class="file-count" id="fileCount">0</span>
-        <span id="processLabel">Copiar y dar formato</span>
-      </button>
-    </section>
-
-    <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
-    <input id="fileInput" type="file" accept="image/*" multiple hidden />
-
-    <div class="progress is-hidden" id="progressBox" aria-live="polite">
-      <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
-      <div class="progress-meta">
-        <span id="progressLabel">Preparando OCR…</span>
-        <span id="progressValue">0%</span>
-      </div>
+    <div class="actions">
+      <button id="cameraButton" type="button">Tomar una foto</button>
+      <button id="uploadButton" type="button">Subir archivo</button>
+      <button id="analyzeButton" type="button" disabled>Analizar datos</button>
     </div>
 
-    <section class="result is-hidden" id="resultSection">
-      <textarea
-        id="formattedOutput"
-        class="output"
-        spellcheck="false"
-        aria-label="Laboratorios formateados"
-        placeholder="Aquí aparecerán los laboratorios formateados."
-      ></textarea>
-      <p class="result-meta" id="resultMeta"></p>
-    </section>
+    <input id="cameraInput" class="file-input" type="file" accept="image/*" capture="environment">
+    <input id="uploadInput" class="file-input" type="file" accept="image/*" multiple>
+
+    <textarea
+      id="output"
+      aria-label="Datos procesados"
+      placeholder="Los datos procesados aparecerán aquí."
+      spellcheck="false"
+    ></textarea>
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
   <script src="lab-parser.js"></script>
   <script src="app.js"></script>
 </body>
