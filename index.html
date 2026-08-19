@@ -11,82 +11,50 @@
   <main class="app-shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">OCR clínico local</p>
+        <p class="eyebrow">OCR de laboratorios</p>
         <h1>LabScan</h1>
       </div>
-      <span class="status-pill" id="engineStatus">OCR sin cargar</span>
+      <span class="status-dot" id="engineStatus" title="Estado del OCR" aria-label="Estado del OCR"></span>
     </header>
 
-    <section class="card capture-card">
-      <div class="card-heading">
-        <div>
-          <h2>1. Fotografiar laboratorio</h2>
-          <p>Coloca la hoja completa, recta y con buena luz.</p>
-        </div>
-      </div>
-
-      <label class="camera-button" for="imageInput">
-        <span class="camera-icon" aria-hidden="true">▣</span>
+    <section class="controls" aria-label="Acciones">
+      <button class="action-button" id="cameraButton" type="button">
+        <span class="button-icon" aria-hidden="true">⌁</span>
         <span>Tomar foto</span>
-      </label>
-      <input id="imageInput" type="file" accept="image/*" capture="environment" hidden />
+      </button>
 
-      <div class="preview-wrap is-hidden" id="previewWrap">
-        <canvas id="previewCanvas"></canvas>
-        <div class="preview-actions">
-          <button class="secondary" id="rotateLeft" type="button">↶ Girar</button>
-          <button class="secondary" id="rotateRight" type="button">Girar ↷</button>
-        </div>
-      </div>
+      <button class="action-button" id="uploadButton" type="button">
+        <span class="button-icon" aria-hidden="true">↑</span>
+        <span>Subir un archivo</span>
+      </button>
 
-      <label class="switch-row" id="preprocessRow">
-        <span>
-          <strong>Mejorar contraste</strong>
-          <small>Escala de grises + contraste antes del OCR.</small>
-        </span>
-        <input id="preprocessToggle" type="checkbox" checked />
-      </label>
-
-      <button class="primary" id="scanButton" type="button" disabled>Extraer y formatear</button>
-
-      <div class="progress is-hidden" id="progressBox" aria-live="polite">
-        <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
-        <div class="progress-meta">
-          <span id="progressLabel">Preparando OCR…</span>
-          <span id="progressValue">0%</span>
-        </div>
-      </div>
+      <button class="action-button primary" id="processButton" type="button" disabled>
+        <span class="file-count" id="fileCount">0</span>
+        <span id="processLabel">Copiar y dar formato</span>
+      </button>
     </section>
 
-    <section class="card is-hidden" id="resultCard">
-      <div class="card-heading result-heading">
-        <div>
-          <h2>2. Resultado</h2>
-          <p id="resultSummary">Laboratorios detectados.</p>
-        </div>
-        <button class="secondary compact" id="copyButton" type="button">Copiar</button>
+    <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden />
+    <input id="fileInput" type="file" accept="image/*" multiple hidden />
+
+    <div class="progress is-hidden" id="progressBox" aria-live="polite">
+      <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="progress-meta">
+        <span id="progressLabel">Preparando OCR…</span>
+        <span id="progressValue">0%</span>
       </div>
+    </div>
 
-      <textarea id="formattedOutput" class="output" spellcheck="false" aria-label="Resultado formateado"></textarea>
-
-      <details class="raw-details">
-        <summary>Ver texto OCR original</summary>
-        <textarea id="rawOutput" class="raw-output" spellcheck="false" aria-label="Texto OCR original"></textarea>
-      </details>
+    <section class="result is-hidden" id="resultSection">
+      <textarea
+        id="formattedOutput"
+        class="output"
+        spellcheck="false"
+        aria-label="Laboratorios formateados"
+        placeholder="Aquí aparecerán los laboratorios formateados."
+      ></textarea>
+      <p class="result-meta" id="resultMeta"></p>
     </section>
-
-    <section class="card test-card">
-      <details>
-        <summary>Probar parser sin cámara</summary>
-        <p class="helper">Pega texto de un laboratorio y procesa únicamente el intérprete.</p>
-        <textarea id="manualInput" class="raw-output" placeholder="HEMATOLOGIA\nHEMOGLOBINA 13.4 g/dL\n..."></textarea>
-        <button class="secondary full" id="parseManualButton" type="button">Formatear texto pegado</button>
-      </details>
-    </section>
-
-    <footer>
-      <p>La imagen se procesa en este navegador. Esta versión no envía ni almacena fotografías en un servidor propio.</p>
-    </footer>
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
