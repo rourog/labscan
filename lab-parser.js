@@ -1,5 +1,5 @@
 /*
- * LabScan parser v4
+ * LabScan parser v5
  * Parser universal orientado a OCR.
  *
  * Cambios principales:
@@ -7,7 +7,9 @@
  * - Alias por laboratorio (incluye RASOMA) y nomenclatura clínica habitual.
  * - Contexto de sección usado solo para resolver ambigüedades, especialmente sangre vs EGO.
  * - Diferencia recuentos absolutos (#) de porcentajes (%) en la biometría.
- * - Toma el primer resultado después del analito y evita, en lo posible, el rango de referencia.
+ * - Conserva valor + unidad.
+ * - Selecciona preferentemente el número asociado a la unidad esperada, evitando rangos de referencia.
+ * - Compatible con filas reconstruidas desde TSV de Tesseract.
  */
 
 (() => {
@@ -25,6 +27,104 @@
     'Examen General de Orina',
     'Otros',
   ];
+
+  const canonicalUnits = {
+    'LEUCOCITOS': 'x10³/µL',
+    'NEUTROFILOS': 'x10³/µL',
+    'LINFOCITOS': 'x10³/µL',
+    'MONOCITOS': 'x10³/µL',
+    'EOSINOFILOS': 'x10³/µL',
+    'BASOFILOS': 'x10³/µL',
+    'ERITROCITOS': 'x10⁶/µL',
+    'HEMOGLOBINA': 'g/dL',
+    'HEMATOCRITO': '%',
+    'VOLUMEN CORPUSCULAR MEDIO': 'fL',
+    'HEMOGLOBINA CORPUSCULAR MEDIA': 'pg',
+    'PLAQUETAS': 'x10³/µL',
+    'VOLUMEN PLAQUETAR MEDIO': 'fL',
+    'GLUCOSA': 'mg/dL',
+    'UREA': 'mg/dL',
+    'CREATININA': 'mg/dL',
+    'ACIDO URICO': 'mg/dL',
+    'BILIRRUBINA TOTAL': 'mg/dL',
+    'BILIRRUBINA DIRECTA': 'mg/dL',
+    'BILIRRUBINA INDIRECTA': 'mg/dL',
+    'OXALACETICA': 'U/L',
+    'PIRUVICA': 'U/L',
+    'FOSFATASA ALCALINA': 'U/L',
+    'GAMAGLUTAMIL TRANSFERASA': 'U/L',
+    'LACTICA': 'U/L',
+    'ALBUMINA': 'g/dL',
+    'PROTEINAS TOTALES': 'g/dL',
+    'AMILASA': 'U/L',
+    'LIPASA': 'U/L',
+    'SODIO': 'mmol/L',
+    'POTASIO': 'mmol/L',
+    'CLORO': 'mmol/L',
+    'CALCIO': 'mg/dL',
+    'FOSFORO': 'mg/dL',
+    'MAGNESIO': 'mg/dL',
+    'CREATINFOSFOQUINASA': 'U/L',
+    'CK-MB': 'U/L',
+    'TROPONINA': 'ng/mL',
+    'MIOGLOBINA': 'ng/mL',
+    'T3 TOTAL': 'ng/dL',
+    'T3 LIBRE': 'pg/mL',
+    'T4 TOTAL': 'µg/dL',
+    'T4 LIBRE': 'ng/dL',
+    'TSH': 'µIU/mL',
+    'COLESTEROL': 'mg/dL',
+    'HDL COLESTEROL': 'mg/dL',
+    'LDL COLESTEROL': 'mg/dL',
+    'VLDL COLESTEROL': 'mg/dL',
+    'TRIGLICERIDOS': 'mg/dL',
+    'TIEMPO DE PROTOMBINA': 'seg',
+    'TIEMPO DE TROMBOPLASTINA PARCIAL': 'seg',
+    '%HBA1C': '%',
+    'MICRO ALBUMINA': 'mg/dL',
+    'PROCALCITONINA': 'ng/mL',
+    'PROTEINA C REACTIVA': 'mg/L',
+    'NT-PROBNP': 'pg/mL',
+    'DIMERO D': 'ng/mL',
+    'LEUCOCITOS_ORINA': '/CAMPO',
+    'ERITROCITOS_ORINA': '/CAMPO',
+  };
+
+  const unitFamilies = {
+    count3: /(?:X\s*10(?:\^|E)?\s*3|10E3|10\^3|MIL)\s*\/?\s*(?:UL|ΜL|ULITRO|MICROLITRO)/i,
+    count6: /(?:X\s*10(?:\^|E)?\s*6|10E6|10\^6|MILL(?:ONES?)?)\s*\/?\s*(?:UL|ΜL|ULITRO|MICROLITRO)/i,
+    gdl: /G\s*\/?\s*DL/i,
+    mgdl: /MG\s*\/?\s*DL/i,
+    ngml: /NG\s*\/?\s*ML/i,
+    pgml: /PG\s*\/?\s*ML/i,
+    ugl: /(?:UG|ΜG|µG)\s*\/?\s*DL/i,
+    mmol: /MMOL\s*\/?\s*L/i,
+    meq: /MEQ\s*\/?\s*L/i,
+    ul: /(?:U\s*\/?\s*L|UIL|U1L)/i,
+    fl: /\bFL\b/i,
+    pg: /\bPG\b/i,
+    percent: /%/,
+    sec: /(?:SEG(?:UNDOS?)?|SEC(?:ONDS?)?)/i,
+    field: /\/\s*CAMPO/i,
+  };
+
+  function hintsForKey(key) {
+    if (['LEUCOCITOS','NEUTROFILOS','LINFOCITOS','MONOCITOS','EOSINOFILOS','BASOFILOS','PLAQUETAS'].includes(key)) return [unitFamilies.count3];
+    if (key === 'ERITROCITOS') return [unitFamilies.count6];
+    if (key === 'HEMOGLOBINA' || key === 'ALBUMINA' || key === 'PROTEINAS TOTALES') return [unitFamilies.gdl];
+    if (key === 'HEMATOCRITO' || key === '%HBA1C') return [unitFamilies.percent];
+    if (['VOLUMEN CORPUSCULAR MEDIO','VOLUMEN PLAQUETAR MEDIO'].includes(key)) return [unitFamilies.fl];
+    if (key === 'HEMOGLOBINA CORPUSCULAR MEDIA') return [unitFamilies.pg];
+    if (['GLUCOSA','UREA','CREATININA','ACIDO URICO','BILIRRUBINA TOTAL','BILIRRUBINA DIRECTA','BILIRRUBINA INDIRECTA','CALCIO','FOSFORO','MAGNESIO','COLESTEROL','HDL COLESTEROL','LDL COLESTEROL','VLDL COLESTEROL','TRIGLICERIDOS','MICRO ALBUMINA'].includes(key)) return [unitFamilies.mgdl];
+    if (['OXALACETICA','PIRUVICA','FOSFATASA ALCALINA','GAMAGLUTAMIL TRANSFERASA','LACTICA','AMILASA','LIPASA','CREATINFOSFOQUINASA','CK-MB'].includes(key)) return [unitFamilies.ul];
+    if (['SODIO','POTASIO','CLORO'].includes(key)) return [unitFamilies.mmol, unitFamilies.meq];
+    if (['TIEMPO DE PROTOMBINA','TIEMPO DE TROMBOPLASTINA PARCIAL'].includes(key)) return [unitFamilies.sec];
+    if (['LEUCOCITOS_ORINA','ERITROCITOS_ORINA'].includes(key)) return [unitFamilies.field];
+    if (['TROPONINA','MIOGLOBINA','PROCALCITONINA','DIMERO D'].includes(key)) return [unitFamilies.ngml];
+    if (['T3 LIBRE','NT-PROBNP'].includes(key)) return [unitFamilies.pgml];
+    if (key === 'T4 TOTAL') return [unitFamilies.ugl];
+    return [];
+  }
 
   const definitions = [
     // BIOMETRÍA HEMÁTICA ---------------------------------------------------
@@ -202,7 +302,12 @@
   ];
 
   function lab(section, key, short, aliases, options = {}) {
-    return { section, key, short, aliases, ...options };
+    return {
+      section, key, short, aliases,
+      unit: canonicalUnits[key] || '',
+      unitHints: hintsForKey(key),
+      ...options,
+    };
   }
 
   function differential(key, short, bases) {
@@ -307,41 +412,113 @@
 
   function cleanTail(tail) {
     return String(tail || '')
-      .replace(/^[\s:;=,.-]+/, '')
+      .replace(/^[\s:;=,._-]+/, '')
       .replace(/(\d),(\d)/g, '$1.$2')
       .trim();
   }
 
   function cleanOCRNumber(token) {
     let value = String(token || '').trim().replace(/,/g, '.');
-    // Correcciones conservadoras solo dentro de un token con aspecto numérico.
-    if (/^[<>]?\s*[0-9OIL.]+$/i.test(value)) {
-      value = value
-        .replace(/O/gi, '0')
-        .replace(/[IL]/gi, '1');
+    if (/^[<>]?\s*-?[0-9OIL.]+$/i.test(value)) {
+      value = value.replace(/O/gi, '0').replace(/[IL]/gi, '1');
     }
-    return value;
+    // Evita perder el punto decimal. Solo colapsa espacios internos.
+    return value.replace(/\s+/g, '');
+  }
+
+  function normalizeUnit(raw) {
+    const unit = String(raw || '')
+      .replace(/\s+/g, '')
+      .replace(/μ/g, 'µ')
+      .replace(/UL$/i, 'µL')
+      .replace(/\^3/g, '³')
+      .replace(/\^6/g, '⁶');
+
+    if (/^(?:X?10(?:E|³)?3|MIL)\/?(?:U?L|µL)$/i.test(unit)) return 'x10³/µL';
+    if (/^(?:X?10(?:E|⁶)?6|MILL(?:ONES?)?)\/?(?:U?L|µL)$/i.test(unit)) return 'x10⁶/µL';
+    if (/^G\/?DL$/i.test(unit)) return 'g/dL';
+    if (/^MG\/?DL$/i.test(unit)) return 'mg/dL';
+    if (/^NG\/?ML$/i.test(unit)) return 'ng/mL';
+    if (/^PG\/?ML$/i.test(unit)) return 'pg/mL';
+    if (/^(?:UG|µG)\/?DL$/i.test(unit)) return 'µg/dL';
+    if (/^MMOL\/?L$/i.test(unit)) return 'mmol/L';
+    if (/^MEQ\/?L$/i.test(unit)) return 'mEq/L';
+    if (/^(?:U\/?L|UIL|U1L)$/i.test(unit)) return 'U/L';
+    if (/^FL$/i.test(unit)) return 'fL';
+    if (/^PG$/i.test(unit)) return 'pg';
+    if (/^%$/.test(unit)) return '%';
+    if (/^(?:SEG(?:UNDOS?)?|SEC(?:ONDS?)?)$/i.test(unit)) return 'seg';
+    if (/^\/?CAMPO$/i.test(unit)) return '/CAMPO';
+    return raw ? String(raw).replace(/\s+/g, ' ').trim() : '';
   }
 
   function extractQualitative(tail) {
-    const q = tail.match(/^(?:"?([ABO]{1,2})"?\s+)?(POSITIVO|NEGATIVO|REACTIVO|NO\s+REACTIVO|NO\s+SE\s+OBSERVAN|ESCAS[OA]S?|MODERAD[OA]S?|ABUNDANTES?|INCONTABLES?|NORMAL|AMARILLO|AMBAR|ROJO|CAFE|CLARO|TURBIO|TRANSPARENTE|OPALESCENTE)(?:\s+(SUPERFICIAL(?:ES)?))?/i);
+    // Tolera artefactos de una sola letra antes del valor (p.ej. "A CLARO").
+    const cleaned = String(tail || '').replace(/^[A-Z]\s+(?=(?:POSITIVO|NEGATIVO|REACTIVO|NO\s+REACTIVO|NO\s+SE\s+OBSERVAN|ESCAS|MODERAD|ABUND|INCONTABLE|NORMAL|AMARILLO|AMBAR|ROJO|CAFE|CLARO|TURBIO|TRANSPARENTE|OPALESCENTE))/i, '');
+    const q = cleaned.match(/^(?:"?([ABO]{1,2})"?\s+)?(POSITIVO|NEGATIVO|REACTIVO|NO\s+REACTIVO|NO\s+SE\s+OBSERVAN|ESCAS[OA]S?|MODERAD[OA]S?|ABUNDANTES?|INCONTABLES?|NORMAL|AMARILLO|AMBAR|ROJO|CAFE|CLARO|TURBIO|TRANSPARENTE|OPALESCENTE)(?:\s+(SUPERFICIAL(?:ES)?))?/i);
     if (!q) return null;
     return q[0].replace(/"/g, '').replace(/\s+/g, ' ').trim();
   }
 
-  function extractNumeric(tail) {
-    // Resultado habitual, con posibilidad de /CAMPO o unidades de conteo.
-    const match = tail.match(/^[<>]?\s*-?[0-9OIL]+(?:[.,][0-9OIL]+)?(?:\s*(?:\/\s*CAMPO|X\s*10(?:\^|E)?-?\d+(?:\s*\/\s*[A-ZµU]+)?))?/i);
-    if (!match) return null;
+  function extractMeasurements(tail) {
+    const text = String(tail || '');
+    const numberRx = /[<>]?\s*-?(?=[0-9OIL]*\d)[0-9OIL]+(?:[.,][0-9OIL]+)?/gi;
+    const candidates = [];
+    let m;
 
-    let value = match[0].replace(/\s+/g, ' ').trim();
-    const field = value.match(/^(.*?)(\s*\/\s*CAMPO)$/i);
-    if (field) return `${cleanOCRNumber(field[1])} /CAMPO`;
+    while ((m = numberRx.exec(text))) {
+      const numberRaw = m[0];
+      const value = cleanOCRNumber(numberRaw);
+      const after = text.slice(m.index + numberRaw.length, m.index + numberRaw.length + 34);
 
-    // Para la salida clínica no necesitamos repetir unidades; conserva solo el
-    // valor, pero sí el comparador si existe.
-    const first = value.match(/^[<>]?\s*-?[0-9OIL]+(?:[.,][0-9OIL]+)?/i);
-    return first ? cleanOCRNumber(first[0]).replace(/\s+/g, '') : null;
+      // Unidad inmediatamente después del resultado. El rango de referencia de
+      // RASOMA normalmente no repite unidad, así que esto permite distinguirlo.
+      const unitMatch = after.match(/^\s*((?:X\s*10(?:\^|E)?\s*[36]|10E[36]|10\^[36]|MIL|MILL(?:ONES?)?)\s*\/?\s*(?:UL|ΜL|µL)|G\s*\/?\s*DL|MG\s*\/?\s*DL|NG\s*\/?\s*ML|PG\s*\/?\s*ML|(?:UG|ΜG|µG)\s*\/?\s*DL|MMOL\s*\/?\s*L|MEQ\s*\/?\s*L|U\s*\/?\s*L|UIL|U1L|FL\b|PG\b|%|SEG(?:UNDOS?)?\b|SEC(?:ONDS?)?\b|\/\s*CAMPO)/i);
+      const rawUnit = unitMatch ? unitMatch[1] : '';
+      candidates.push({
+        value,
+        unit: normalizeUnit(rawUnit),
+        rawUnit,
+        index: m.index,
+      });
+    }
+    return candidates;
+  }
+
+  function unitMatches(candidate, def) {
+    if (!candidate.rawUnit || !def.unitHints?.length) return false;
+    return def.unitHints.some(hint => {
+      const flags = hint.flags.replace('g', '');
+      return new RegExp(hint.source, flags).test(candidate.rawUnit);
+    });
+  }
+
+  function extractMeasurement(tail, def) {
+    if (def.qualitative || def.urineOnly) {
+      const qualitative = extractQualitative(tail);
+      if (qualitative) return { value: qualitative, unit: '', quality: 5 };
+    }
+
+    const candidates = extractMeasurements(tail);
+    if (candidates.length) {
+      // Preferir SIEMPRE el número que está pegado a una unidad compatible.
+      // Así "NEUTROFILOS # 4 12.4 x10e3/uL 1.5-7.5" -> 12.4, no 4.
+      const byUnit = candidates.find(candidate => unitMatches(candidate, def));
+      const chosen = byUnit || candidates[0];
+      const forceCanonicalCountUnit = [
+        'LEUCOCITOS','NEUTROFILOS','LINFOCITOS','MONOCITOS','EOSINOFILOS','BASOFILOS','ERITROCITOS','PLAQUETAS'
+      ].includes(def.key);
+
+      return {
+        value: chosen.value,
+        unit: forceCanonicalCountUnit ? (def.unit || chosen.unit || '') : (chosen.unit || def.unit || ''),
+        quality: byUnit ? 5 : (chosen.rawUnit ? 4 : 2),
+      };
+    }
+
+    const qualitative = extractQualitative(tail);
+    if (qualitative) return { value: qualitative, unit: '', quality: 4 };
+    return null;
   }
 
   function extractValueFromRow(row, def) {
@@ -349,40 +526,31 @@
       const match = aliasMatch(row.text, alias);
       if (!match) continue;
 
-      if (def.rejectPercentLine && /%/.test(row.text.slice(match.index))) continue;
+      if (def.rejectPercentLine && /%/.test(row.text.slice(match.index, match.index + match[0].length + 8))) continue;
 
       const tail = cleanTail(row.text.slice(match.index + match[0].length));
-      if (!tail) return { matched: true, value: null };
+      if (!tail) return { matched: true, measurement: null };
 
-      if (def.qualitative || def.urineOnly) {
-        const qualitative = extractQualitative(tail);
-        if (qualitative) return { matched: true, value: qualitative };
-      }
-
-      const numeric = extractNumeric(tail);
-      if (numeric !== null) return { matched: true, value: numeric };
-
-      const qualitative = extractQualitative(tail);
-      if (qualitative) return { matched: true, value: qualitative };
-
-      return { matched: true, value: null };
+      const measurement = extractMeasurement(tail, def);
+      return { matched: true, measurement };
     }
-    return { matched: false, value: null };
+    return { matched: false, measurement: null };
   }
 
   function nextLineValue(rows, index, def) {
-    // Solo rescate inmediato. Evita saltar varias líneas y terminar tomando el
-    // rango de referencia de otra prueba.
     const next = rows[index + 1];
     if (!next || next.context !== rows[index].context) return null;
     const tail = cleanTail(next.text);
     if (!tail) return null;
 
-    if (def.qualitative || def.urineOnly) {
-      const qualitative = extractQualitative(tail);
-      if (qualitative) return qualitative;
-    }
-    return extractNumeric(tail) || extractQualitative(tail);
+    // Rescate solo si la siguiente línea ES el valor. No buscamos números dentro
+    // de frases como "Resultados validados... 19-08-2026", porque acabaríamos
+    // convirtiendo fechas o rangos en resultados de laboratorio.
+    const startsNumeric = /^[<>]?\s*-?\d/.test(tail);
+    const startsQualitative = /^(?:"?[ABO]{1,2}"?\s+)?(?:POSITIVO|NEGATIVO|REACTIVO|NO\s+REACTIVO|NO\s+SE\s+OBSERVAN|ESCAS|MODERAD|ABUND|INCONTABLE|NORMAL|AMARILLO|AMBAR|ROJO|CAFE|CLARO|TURBIO|TRANSPARENTE|OPALESCENTE)/i.test(tail);
+    if (!startsNumeric && !startsQualitative) return null;
+
+    return extractMeasurement(tail, def);
   }
 
   function rowsForDefinition(rows, def) {
@@ -393,30 +561,41 @@
 
   function findDefinitionValue(rows, def) {
     const candidates = rowsForDefinition(rows, def);
+    let best = null;
 
-    // Preferencia 1: contexto de la sección esperada.
-    const ordered = [
-      ...candidates.filter(row => row.context === def.section),
-      ...candidates.filter(row => row.context !== def.section),
-    ];
-
-    const visited = new Set();
-    for (const row of ordered) {
-      const id = `${row.index}:${row.text}`;
-      if (visited.has(id)) continue;
-      visited.add(id);
-
+    for (const row of candidates) {
       const result = extractValueFromRow(row, def);
       if (!result.matched) continue;
-      if (result.value !== null) return result.value;
 
-      const originalIndex = rows.findIndex(r => r.index === row.index && r.text === row.text);
-      if (originalIndex >= 0) {
-        const rescued = nextLineValue(rows, originalIndex, def);
-        if (rescued !== null) return rescued;
+      if (result.measurement !== null) {
+        let score = result.measurement.quality || 1;
+        if (row.context === def.section) score += 2;
+        // Resultado en la misma fila que el analito: mucho más fiable que
+        // rescatar el número de la línea siguiente.
+        score += 2;
+        if (!best || score > best.score) {
+          best = { measurement: result.measurement, score };
+        }
+      }
+
+      if (result.measurement === null) {
+        const originalIndex = rows.findIndex(r => r.index === row.index && r.text === row.text);
+        if (originalIndex >= 0) {
+          const rescued = nextLineValue(rows, originalIndex, def);
+          if (rescued !== null) {
+            let score = Math.max(1, (rescued.quality || 1) - 2);
+            if (row.context === def.section) score += 1;
+            if (!best || score > best.score) {
+              best = { measurement: rescued, score };
+            }
+          }
+        }
       }
     }
-    return null;
+
+    if (!best) return null;
+    const { quality, ...measurement } = best.measurement;
+    return measurement;
   }
 
   function findGroupAndRh(rows) {
@@ -442,23 +621,23 @@
     const data = {};
 
     for (const def of definitions) {
-      const value = findDefinitionValue(rows, def);
-      if (value === null) continue;
+      const measurement = findDefinitionValue(rows, def);
+      if (measurement === null) continue;
       if (!data[def.section]) data[def.section] = [];
-      data[def.section].push({ key: def.key, short: def.short, value });
+      data[def.section].push({ key: def.key, short: def.short, ...measurement });
     }
 
     for (const def of urineDefinitions) {
-      const value = findDefinitionValue(rows, def);
-      if (value === null) continue;
+      const measurement = findDefinitionValue(rows, def);
+      if (measurement === null) continue;
       if (!data[def.section]) data[def.section] = [];
-      data[def.section].push({ key: def.key, short: def.short, value });
+      data[def.section].push({ key: def.key, short: def.short, ...measurement });
     }
 
     const groupRh = findGroupAndRh(rows);
     if (groupRh) {
       if (!data.Otros) data.Otros = [];
-      data.Otros.unshift({ key: 'GRUPO Y RH', short: 'Grupo/RH', value: groupRh });
+      data.Otros.unshift({ key: 'GRUPO Y RH', short: 'Grupo/RH', value: groupRh, unit: '' });
     }
 
     return data;
@@ -469,7 +648,7 @@
     for (const section of sectionsOrder) {
       const items = parsed[section];
       if (!items?.length) continue;
-      lines.push(`${section}: ${items.map(item => `${item.short} ${item.value}`).join(', ')}`);
+      lines.push(`${section}: ${items.map(item => `${item.short} ${item.value}${item.unit ? ' ' + item.unit : ''}`).join(', ')}`);
     }
     return lines.join('\n').trim();
   }

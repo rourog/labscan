@@ -1,36 +1,31 @@
-# LabScan by Rourog — v4
+# LabScan by Rourog — v5
 
 MVP estático para GitHub Pages.
 
 ## Flujo
 
-1. **Tomar una foto** o **Subir archivo**.
-2. Se pueden acumular varias imágenes del mismo laboratorio.
-3. Pulsar **Analizar datos**.
-4. Tesseract.js ejecuta OCR en el navegador.
-5. El parser universal normaliza los nombres y presenta los datos procesados.
+1. Tomar una foto o subir una imagen.
+2. `Analizar datos`.
+3. El resultado formateado aparece en el cuadro de texto.
 
-## Cambios v4
+## Cambios de v5
 
-- El parser ya no depende de que el documento use los encabezados del Hospital Regional.
-- Añade variantes observadas en **Laboratorios RASOMA**.
-- Reconoce, entre otras, estas equivalencias:
-  - `CLORURO` → `Cl`
-  - `ASPARTATO AMINOTRANSFERASA TGO` / `AST` → `TGO`
-  - `ALANINA AMINOTRANSFERASA TGP` / `ALT` → `TGP`
-  - `GRUPO SANGUÍNEO Y FACTOR Rh` → `Grupo/RH`
-  - `VOLUMEN PLAQUETARIO MEDIO` → `VPM`
-- Diferencia `NEUTRÓFILOS %` de `NEUTRÓFILOS #` (y equivalentes de linfocitos/monocitos/eosinófilos/basófilos).
-- Los encabezados sirven como contexto, pero los analitos se buscan globalmente.
-- El bloque de EGO se aísla del resto para evitar confundir glucosa, hemoglobina, eritrocitos o leucocitos urinarios con sangre.
+- OCR con salida TSV para conservar la posición de las palabras.
+- Reconstrucción de las filas `ESTUDIO | RESULTADO | REFERENCIA` antes de interpretar los datos.
+- El parser prioriza el valor asociado a la unidad del estudio en vez del primer número encontrado.
+- Se conservan puntos decimales y se muestran unidades.
+- Compatibilidad ampliada con RASOMA y el formato previo del Hospital Regional.
+- Diferenciación de recuentos absolutos y porcentajes en la biometría.
+- Correcciones para `CLORURO`, AST/TGO, ALT/TGP, Grupo/Rh y variantes frecuentes de OCR.
+- Se eliminó el aumento artificial de contraste para no perder puntos decimales y caracteres finos.
+- Las imágenes de baja resolución se amplían antes del OCR.
+- Los recursos locales usan `?v=5` para evitar que GitHub Pages reutilice JavaScript antiguo desde caché.
 
-## Publicación
+## Archivos
 
-Sube estos archivos al mismo directorio del repositorio y activa GitHub Pages:
+- `index.html`: interfaz.
+- `styles.css`: interfaz minimalista.
+- `app.js`: captura/subida, OCR y reconstrucción espacial de tablas.
+- `lab-parser.js`: intérprete universal de laboratorios.
 
-- `index.html`
-- `styles.css`
-- `app.js`
-- `lab-parser.js`
-
-No requiere build, Node ni backend.
+No requiere Node, build ni backend.

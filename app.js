@@ -79,6 +79,14 @@
       }
     });
 
+    // Mantiene mejor la separación de columnas y comunica una resolución
+    // razonable al motor OCR. No limitamos caracteres: necesitamos letras,
+    // unidades, signos y puntos decimales.
+    await worker.setParameters({
+      preserve_interword_spaces: '1',
+      user_defined_dpi: '300',
+    });
+
     return worker;
   }
 
@@ -99,8 +107,15 @@
         });
       }
 
-      const maxDimension = 2400;
-      const factor = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+      // El texto de una hoja completa queda pequeño en fotos de WhatsApp.
+      // Tesseract mejora claramente con más resolución; por eso permitimos
+      // ampliar la imagen hasta ~3000 px en su lado largo en lugar de reducirla.
+      const longEdge = Math.max(image.naturalWidth, image.naturalHeight);
+      const targetLongEdge = 3000;
+      const factor = longEdge < targetLongEdge
+        ? Math.min(2.2, targetLongEdge / longEdge)
+        : Math.min(1, targetLongEdge / longEdge);
+
       const width = Math.max(1, Math.round(image.naturalWidth * factor));
       const height = Math.max(1, Math.round(image.naturalHeight * factor));
 
@@ -108,29 +123,155 @@
       canvas.width = width;
       canvas.height = height;
 
-      const context = canvas.getContext('2d', { willReadFrequently: true });
+      const context = canvas.getContext('2d', { willReadFrequently: false });
       if (!context) throw new Error('El navegador no permitió procesar la imagen.');
 
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
       context.drawImage(image, 0, 0, width, height);
 
-      // Preprocesamiento discreto: gris + contraste. No altera el archivo original.
-      const imageData = context.getImageData(0, 0, width, height);
-      const pixels = imageData.data;
-      const contrast = 1.35;
-
-      for (let i = 0; i < pixels.length; i += 4) {
-        const gray = 0.2126 * pixels[i] + 0.7152 * pixels[i + 1] + 0.0722 * pixels[i + 2];
-        const value = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
-        pixels[i] = value;
-        pixels[i + 1] = value;
-        pixels[i + 2] = value;
-      }
-
-      context.putImageData(imageData, 0, 0);
+      // v5: no aplicamos contraste artificial. En las pruebas reales ese paso
+      // podía aclarar puntos decimales y caracteres finos (p.ej. 9.9 -> 9971).
+      // Tesseract recibe la imagen ampliada conservando la información original.
       return canvas;
     } finally {
       URL.revokeObjectURL(objectUrl);
     }
+  }
+
+  function median(values) {
+    if (!values.length) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  function tsvToVisualText(tsv) {
+    if (!tsv || typeof tsv !== 'string') return '';
+    const rows = tsv.split(/\r?\n/);
+    if (rows.length < 2) return '';
+
+    const words = [];
+    for (let i = 1; i < rows.length; i++) {
+      if (!rows[i].trim()) continue;
+      const cols = rows[i].split('\t');
+      if (cols.length < 12 || Number(cols[0]) !== 5) continue;
+
+      const text = cols.slice(11).join('\t').trim();
+      if (!text) continue;
+
+      const page = Number(cols[1]);
+      const block = Number(cols[2]);
+      const paragraph = Number(cols[3]);
+      const line = Number(cols[4]);
+      const left = Number(cols[6]);
+      const top = Number(cols[7]);
+      const width = Number(cols[8]);
+      const height = Number(cols[9]);
+      const conf = Number(cols[10]);
+      if (![page, block, paragraph, line, left, top, width, height].every(Number.isFinite)) continue;
+      if (Number.isFinite(conf) && conf < 0) continue;
+
+      words.push({
+        text, page, block, paragraph, line,
+        key: `${page}:${block}:${paragraph}:${line}`,
+        left, top, width, height,
+        right: left + width,
+        bottom: top + height,
+        cy: top + height / 2,
+      });
+    }
+
+    if (!words.length) return '';
+
+    const typicalHeight = Math.max(8, median(words.map(word => word.height)));
+    const mergeTolerance = Math.max(9, typicalHeight * 0.88);
+
+    // Primero respetamos las líneas que Tesseract ya identificó. Esto es clave
+    // en tablas inclinadas: GLUCOSA, 98 mg/dL y 70-100 pueden tener diferente Y,
+    // pero Tesseract sabe que pertenecen a la misma línea lógica.
+    const grouped = new Map();
+    for (const word of words) {
+      if (!grouped.has(word.key)) grouped.set(word.key, []);
+      grouped.get(word.key).push(word);
+    }
+
+    const segments = [];
+    for (const [key, segmentWords] of grouped) {
+      segmentWords.sort((a, b) => a.left - b.left);
+      segments.push({
+        key,
+        block: segmentWords[0].block,
+        words: segmentWords,
+        left: Math.min(...segmentWords.map(word => word.left)),
+        right: Math.max(...segmentWords.map(word => word.right)),
+        top: Math.min(...segmentWords.map(word => word.top)),
+        bottom: Math.max(...segmentWords.map(word => word.bottom)),
+        cy: segmentWords.reduce((sum, word) => sum + word.cy, 0) / segmentWords.length,
+      });
+    }
+
+    segments.sort((a, b) => a.cy - b.cy || a.left - b.left);
+    const visualRows = [];
+
+    // Algunos formatos (RASOMA, por ejemplo) separan la columna ESTUDIO de la
+    // columna RESULTADO en bloques OCR distintos. Fusionamos solo segmentos de
+    // bloques/líneas diferentes que estén a la misma altura y no se superpongan.
+    for (const segment of segments) {
+      let best = null;
+      let bestDistance = Infinity;
+
+      for (let i = visualRows.length - 1; i >= 0 && i >= visualRows.length - 7; i--) {
+        const row = visualRows[i];
+        const distance = Math.abs(segment.cy - row.cy);
+        if (distance > mergeTolerance || distance >= bestDistance) continue;
+        if (row.segments.some(existing => existing.key === segment.key)) continue;
+
+        const overlap = Math.max(0, Math.min(segment.right, row.right) - Math.max(segment.left, row.left));
+        const minWidth = Math.max(1, Math.min(segment.right - segment.left, row.right - row.left));
+        if (overlap / minWidth >= 0.45) continue;
+
+        best = row;
+        bestDistance = distance;
+      }
+
+      if (!best) {
+        best = {
+          segments: [],
+          cy: segment.cy,
+          top: segment.top,
+          left: segment.left,
+          right: segment.right,
+        };
+        visualRows.push(best);
+      }
+
+      best.segments.push(segment);
+      best.cy = best.segments.reduce((sum, item) => sum + item.cy, 0) / best.segments.length;
+      best.top = Math.min(best.top, segment.top);
+      best.left = Math.min(best.left, segment.left);
+      best.right = Math.max(best.right, segment.right);
+    }
+
+    visualRows.sort((a, b) => a.top - b.top);
+
+    return visualRows.map(row => {
+      const sorted = row.segments
+        .flatMap(segment => segment.words)
+        .sort((a, b) => a.left - b.left);
+
+      let line = '';
+      let previous = null;
+      for (const word of sorted) {
+        if (previous) {
+          const gap = word.left - previous.right;
+          line += gap > typicalHeight * 2.2 ? '   ' : ' ';
+        }
+        line += word.text;
+        previous = word;
+      }
+      return line.trim();
+    }).filter(Boolean).join('\n');
   }
 
   function formatOCR(rawText) {
@@ -174,8 +315,16 @@
           : 'Analizando';
 
         const canvas = await imageToCanvas(batch[index]);
-        const result = await ocrWorker.recognize(canvas, { rotateAuto: true });
-        pages.push(result?.data?.text || '');
+        const result = await ocrWorker.recognize(
+          canvas,
+          { rotateAuto: true },
+          { text: true, tsv: true }
+        );
+
+        const rawText = result?.data?.text || '';
+        const visualText = tsvToVisualText(result?.data?.tsv || '');
+        pages.push(visualText || rawText);
+
       }
 
       const formatted = formatOCR(pages.join('\n\n'));
