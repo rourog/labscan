@@ -1,5 +1,5 @@
 /*
- * LabScan parser v6
+ * LabScan parser v10
  * Parser universal orientado a OCR.
  *
  * Cambios principales:
@@ -27,6 +27,116 @@
     'Examen General de Orina',
     'Otros',
   ];
+
+  const sectionDisplayNames = {
+    'Biometría Hemática': 'Biometría Hemática',
+    'Química Sanguínea': 'Química Sanguínea',
+    'Pruebas de Función Hepática': 'Pruebas de Función Hepática',
+    'Electrolitos Sericos': 'Electrolitos Séricos',
+    'Enzimas Cardiacas': 'Enzimas Cardíacas',
+    'Perfil Tiroideo': 'Perfil Tiroideo',
+    'Perfil de Lipidos': 'Perfil de Lípidos',
+    'Tiempos de Coagulacion': 'Tiempos de Coagulación',
+    'Examen General de Orina': 'Examen General de Orina',
+    'Otros': 'Otros',
+  };
+
+  const sectionShortNames = {
+    'Biometría Hemática': 'BH',
+    'Química Sanguínea': 'QS',
+    'Pruebas de Función Hepática': 'PFH',
+    'Electrolitos Sericos': 'ES',
+    'Enzimas Cardiacas': 'EC',
+    'Perfil Tiroideo': 'Tiroides',
+    'Perfil de Lipidos': 'Lípidos',
+    'Tiempos de Coagulacion': 'Coagulación',
+    'Examen General de Orina': 'EGO',
+    'Otros': 'Otros',
+  };
+
+  const displayNames = {
+    'GRUPO Y RH': 'Grupo sanguíneo y factor Rh',
+    'LEUCOCITOS': 'Leucocitos',
+    'NEUTROFILOS': 'Neutrófilos',
+    'LINFOCITOS': 'Linfocitos',
+    'MONOCITOS': 'Monocitos',
+    'EOSINOFILOS': 'Eosinófilos',
+    'BASOFILOS': 'Basófilos',
+    'ERITROCITOS': 'Eritrocitos',
+    'HEMOGLOBINA': 'Hemoglobina',
+    'HEMATOCRITO': 'Hematocrito',
+    'VOLUMEN CORPUSCULAR MEDIO': 'Volumen corpuscular medio',
+    'HEMOGLOBINA CORPUSCULAR MEDIA': 'Hemoglobina corpuscular media',
+    'PLAQUETAS': 'Plaquetas',
+    'VOLUMEN PLAQUETAR MEDIO': 'Volumen plaquetar medio',
+    'GLUCOSA': 'Glucosa',
+    'UREA': 'Urea',
+    'CREATININA': 'Creatinina',
+    'ACIDO URICO': 'Ácido úrico',
+    'BILIRRUBINA TOTAL': 'Bilirrubina total',
+    'BILIRRUBINA DIRECTA': 'Bilirrubina directa',
+    'BILIRRUBINA INDIRECTA': 'Bilirrubina indirecta',
+    'OXALACETICA': 'Aspartato aminotransferasa (TGO/AST)',
+    'PIRUVICA': 'Alanina aminotransferasa (TGP/ALT)',
+    'FOSFATASA ALCALINA': 'Fosfatasa alcalina',
+    'GAMAGLUTAMIL TRANSFERASA': 'Gamaglutamil transferasa',
+    'LACTICA': 'Deshidrogenasa láctica',
+    'ALBUMINA': 'Albúmina',
+    'PROTEINAS TOTALES': 'Proteínas totales',
+    'AMILASA': 'Amilasa',
+    'LIPASA': 'Lipasa',
+    'SODIO': 'Sodio',
+    'POTASIO': 'Potasio',
+    'CLORO': 'Cloro',
+    'CALCIO': 'Calcio',
+    'FOSFORO': 'Fósforo',
+    'MAGNESIO': 'Magnesio',
+    'CREATINFOSFOQUINASA': 'Creatinfosfoquinasa',
+    'CK-MB': 'CK-MB',
+    'TROPONINA': 'Troponina',
+    'MIOGLOBINA': 'Mioglobina',
+    'T3 TOTAL': 'T3 total',
+    'T3 LIBRE': 'T3 libre',
+    'T4 TOTAL': 'T4 total',
+    'T4 LIBRE': 'T4 libre',
+    'TSH': 'TSH',
+    'COLESTEROL': 'Colesterol total',
+    'HDL COLESTEROL': 'Colesterol HDL',
+    'LDL COLESTEROL': 'Colesterol LDL',
+    'VLDL COLESTEROL': 'Colesterol VLDL',
+    'TRIGLICERIDOS': 'Triglicéridos',
+    'TIEMPO DE PROTOMBINA': 'Tiempo de protrombina',
+    'TIEMPO DE TROMBOPLASTINA PARCIAL': 'Tiempo de tromboplastina parcial',
+    'INR': 'INR',
+    '%HBA1C': 'Hemoglobina glucosilada',
+    'MICRO ALBUMINA': 'Microalbúmina',
+    'PROCALCITONINA': 'Procalcitonina',
+    'PROTEINA C REACTIVA': 'Proteína C reactiva',
+    'NT-PROBNP': 'NT-proBNP',
+    'VDRL': 'VDRL',
+    'HIV': 'VIH',
+    'VIRUS HEPATITIS A': 'Hepatitis A',
+    'VIRUS HEPATITIS B': 'Hepatitis B',
+    'VIRUS HEPATITIS C': 'Hepatitis C',
+    'PRUEBA DE EMBARAZO': 'Prueba de embarazo',
+    'DIMERO D': 'Dímero D',
+    'COLOR_ORINA': 'Color',
+    'ASPECTO_ORINA': 'Aspecto',
+    'DENSIDAD_ORINA': 'Densidad',
+    'PH_ORINA': 'pH',
+    'NITRITOS_ORINA': 'Nitritos',
+    'GLUCOSA_ORINA': 'Glucosa',
+    'HB_ORINA': 'Hemoglobina',
+    'LEUCOCITOS_ORINA': 'Leucocitos',
+    'ERITROCITOS_ORINA': 'Eritrocitos',
+    'CELULAS_ORINA': 'Células epiteliales',
+    'BACTERIAS_ORINA': 'Bacterias',
+    'CRISTALES_ORINA': 'Cristales',
+    'CILINDROS_ORINA': 'Cilindros',
+    'MOCO_ORINA': 'Moco',
+    'LEVADURAS_ORINA': 'Levaduras',
+    'PARASITOS_ORINA': 'Parásitos',
+  };
 
   const canonicalUnits = {
     'LEUCOCITOS': 'x10³/µL',
@@ -656,14 +766,47 @@
     return data;
   }
 
-  function formatForClipboard(parsed) {
+  function formatLabResults(parsed, options = {}) {
+    const layout = options.layout === 'expanded' ? 'expanded' : 'compact';
+    const abbreviations = options.abbreviations !== false;
+    const uppercase = options.uppercase === true;
+    const shortSections = options.shortSections === true;
     const lines = [];
+
+    const itemText = item => {
+      const label = abbreviations
+        ? item.short
+        : (displayNames[item.key] || item.short || item.key);
+      return `${label} ${item.value}${item.unit ? ' ' + item.unit : ''}`;
+    };
+
     for (const section of sectionsOrder) {
-      const items = parsed[section];
+      const items = parsed?.[section];
       if (!items?.length) continue;
-      lines.push(`${section}: ${items.map(item => `${item.short} ${item.value}${item.unit ? ' ' + item.unit : ''}`).join(', ')}`);
+      const sectionLabel = shortSections
+        ? (sectionShortNames[section] || section)
+        : (sectionDisplayNames[section] || section);
+
+      if (layout === 'expanded') {
+        if (lines.length) lines.push('');
+        lines.push(`${sectionLabel}:`);
+        for (const item of items) lines.push(itemText(item));
+      } else {
+        lines.push(`${sectionLabel}: ${items.map(itemText).join(', ')}`);
+      }
     }
-    return lines.join('\n').trim();
+
+    const text = lines.join('\n').trim();
+    return uppercase ? text.toLocaleUpperCase('es-MX') : text;
+  }
+
+  function formatForClipboard(parsed) {
+    return formatLabResults(parsed, {
+      layout: 'compact',
+      abbreviations: true,
+      uppercase: false,
+      shortSections: false,
+    });
   }
 
   function countResults(parsed) {
@@ -673,8 +816,12 @@
   window.LabParser = {
     parseLabResults,
     formatForClipboard,
+    formatLabResults,
     countResults,
     normalizeOCR,
     sectionsOrder,
+    sectionShortNames,
+    sectionDisplayNames,
+    displayNames,
   };
 })();

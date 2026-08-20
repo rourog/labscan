@@ -7,6 +7,7 @@
   const cameraButton = document.getElementById('cameraButton');
   const uploadButton = document.getElementById('uploadButton');
   const analyzeButton = document.getElementById('analyzeButton');
+  const analyzeButtonLabel = document.getElementById('analyzeButtonLabel');
   const cameraInput = document.getElementById('cameraInput');
   const uploadInput = document.getElementById('uploadInput');
   const output = document.getElementById('output');
@@ -21,11 +22,16 @@
   const STRUCTURE_PASS_WEIGHT = 1.0;
   const RESULT_PASS_WEIGHT = 0.45;
 
+  function setAnalyzeLabel(text) {
+    if (analyzeButtonLabel) analyzeButtonLabel.textContent = text;
+    else analyzeButton.textContent = text;
+  }
+
   function setAnalyzeState() {
     analyzeButton.disabled = files.length === 0;
-    analyzeButton.textContent = files.length > 1
+    setAnalyzeLabel(files.length > 1
       ? `Analizar datos · ${files.length}`
-      : 'Analizar datos';
+      : 'Analizar datos');
   }
 
   function createAnalysisProgress(pageCount) {
@@ -41,7 +47,7 @@
     const render = value => {
       const percent = Math.max(lastPercent, Math.min(100, Math.round(value)));
       lastPercent = percent;
-      analyzeButton.textContent = `Analizando · ${percent}%`;
+      setAnalyzeLabel(`Analizando · ${percent}%`);
     };
 
     return {
@@ -565,7 +571,8 @@
     if (!window.LabParser) throw new Error('No se cargó el intérprete de laboratorios.');
     const normalized = LabParser.normalizeOCR(rawText);
     const parsed = LabParser.parseLabResults(normalized);
-    return LabParser.formatForClipboard(parsed);
+    const formatted = LabParser.formatForClipboard(parsed);
+    return { parsed, formatted };
   }
 
   cameraButton.addEventListener('click', () => openFilePicker(cameraInput));
@@ -596,11 +603,11 @@
       }
 
       progress.parsing();
-      const formatted = formatOCR(pages.join('\n\n'));
-      output.value = formatted || 'No se reconocieron datos de laboratorio con el formato conocido.';
-      if (formatted) {
+      const result = formatOCR(pages.join('\n\n'));
+      output.value = result.formatted || 'No se reconocieron datos de laboratorio con el formato conocido.';
+      if (result.formatted) {
         window.dispatchEvent(new CustomEvent('labscan:result', {
-          detail: { text: formatted }
+          detail: { text: result.formatted, parsed: result.parsed }
         }));
       }
       files = [];

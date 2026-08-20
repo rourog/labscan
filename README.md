@@ -1,25 +1,29 @@
 # LabScan
 
-LabScan es una aplicación web para digitalizar resultados de laboratorio impresos y transferir el texto procesado a una sesión vinculada en otra pantalla.
+LabScan es una herramienta web para digitalizar resultados de laboratorio impresos y transferir el texto procesado desde un teléfono a una sesión abierta en PC.
 
 ## Uso
 
 1. Abre `https://rourog.github.io/labscan/` en la PC.
-2. Escanea el código QR con el teléfono y verifica que ambas pantallas muestren el mismo código.
-3. Toma una fotografía o selecciona una imagen del laboratorio.
+2. Escanea el QR con el teléfono y confirma que el código de vínculo coincida en ambas pantallas.
+3. Toma una fotografía o selecciona una imagen.
 4. Pulsa **Analizar datos**.
-5. Revisa el resultado en la PC y utiliza **Copiar** para llevarlo a la nota correspondiente.
+5. Revisa el resultado recibido en la PC y pulsa **Copiar**.
 
-## Privacidad
+## Formato de salida
 
-Las imágenes se procesan en el navegador. La sincronización entre dispositivos utiliza una sesión temporal y transmite el texto procesado, no la fotografía original.
+En escritorio se puede cambiar la presentación sin repetir el escaneo:
+
+- Vista reducida o expandida.
+- Abreviaturas o nombres completos.
+- Conversión a mayúsculas.
+
+Las unidades se conservan en todos los modos.
 
 ## Despliegue
 
-El frontend está preparado para GitHub Pages. Requiere Firebase Authentication y Realtime Database configurados para el proyecto, junto con las reglas incluidas en `database.rules.json`.
-
-No requiere Firebase Hosting ni un proceso de compilación.
+El proyecto está preparado para GitHub Pages y utiliza Firebase Authentication y Realtime Database para la vinculación temporal entre dispositivos.
 
 ## Aviso
 
-El reconocimiento óptico puede cometer errores. Los resultados deben verificarse contra el documento original antes de incorporarlos a una nota médica o utilizarlos para decisiones clínicas.
+El reconocimiento de texto puede cometer errores. Los resultados deben verificarse contra el documento original antes de incorporarlos a una nota médica o utilizarlos para decisiones clínicas.

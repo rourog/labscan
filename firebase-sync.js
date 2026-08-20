@@ -18,7 +18,7 @@ import {
   firebaseConfig,
   labScanConfig,
   isFirebaseConfigured
-} from './firebase-config.js?v=9';
+} from './firebase-config.js?v=10.0';
 
 const desktopView = document.getElementById('desktopView');
 const mobileView = document.getElementById('mobileView');
@@ -30,6 +30,10 @@ const copyDesktopButton = document.getElementById('copyDesktopButton');
 const qrCode = document.getElementById('qrCode');
 const desktopPairCode = document.getElementById('desktopPairCode');
 const mobilePairCode = document.getElementById('mobilePairCode');
+const compactModeButton = document.getElementById('compactModeButton');
+const expandedModeButton = document.getElementById('expandedModeButton');
+const abbreviationsToggle = document.getElementById('abbreviationsToggle');
+const uppercaseToggle = document.getElementById('uppercaseToggle');
 
 const params = new URLSearchParams(location.search);
 const requestedSessionId = sanitizeSessionId(params.get('session'));
@@ -44,6 +48,99 @@ let currentSessionId = null;
 let pendingResult = '';
 let stopSessionListener = null;
 let cleanupTimer = null;
+let desktopParsedResult = null;
+let desktopFallbackText = '';
+
+const formatPreferences = loadFormatPreferences();
+
+function loadFormatPreferences() {
+  const defaults = { layout: 'compact', abbreviations: true, uppercase: false };
+  try {
+    const saved = JSON.parse(localStorage.getItem('labscan-format-v1') || 'null');
+    if (!saved || typeof saved !== 'object') return defaults;
+    return {
+      layout: saved.layout === 'expanded' ? 'expanded' : 'compact',
+      abbreviations: saved.abbreviations !== false,
+      uppercase: saved.uppercase === true,
+    };
+  } catch (_) {
+    return defaults;
+  }
+}
+
+function saveFormatPreferences() {
+  try {
+    localStorage.setItem('labscan-format-v1', JSON.stringify(formatPreferences));
+  } catch (_) {}
+}
+
+function setToggleState(button, active) {
+  if (!button) return;
+  button.classList.toggle('is-active', active);
+  button.setAttribute('aria-pressed', active ? 'true' : 'false');
+}
+
+function syncFormatControls() {
+  setToggleState(compactModeButton, formatPreferences.layout === 'compact');
+  setToggleState(expandedModeButton, formatPreferences.layout === 'expanded');
+  setToggleState(abbreviationsToggle, formatPreferences.abbreviations);
+  setToggleState(uppercaseToggle, formatPreferences.uppercase);
+}
+
+function renderDesktopResult() {
+  let text = desktopFallbackText || '';
+
+  if (desktopParsedResult && window.LabParser?.formatLabResults) {
+    text = window.LabParser.formatLabResults(desktopParsedResult, {
+      layout: formatPreferences.layout,
+      abbreviations: formatPreferences.abbreviations,
+      uppercase: formatPreferences.uppercase,
+      shortSections: formatPreferences.layout === 'compact',
+    });
+  } else if (formatPreferences.uppercase && text) {
+    text = text.toLocaleUpperCase('es-MX');
+  }
+
+  desktopOutput.value = text;
+  copyDesktopButton.disabled = !text.trim();
+}
+
+function serializeLabResult(detail = {}) {
+  const text = String(detail.text || '').trim();
+  if (!text) return '';
+
+  if (detail.parsed && typeof detail.parsed === 'object') {
+    try {
+      return JSON.stringify({
+        kind: 'labscan-result',
+        version: 1,
+        text,
+        parsed: detail.parsed,
+      });
+    } catch (_) {}
+  }
+
+  return text;
+}
+
+function readLabResult(payload) {
+  const raw = String(payload || '');
+  if (!raw) return { text: '', parsed: null };
+
+  if (raw[0] === '{') {
+    try {
+      const decoded = JSON.parse(raw);
+      if (decoded?.kind === 'labscan-result' && decoded.parsed && typeof decoded.parsed === 'object') {
+        return {
+          text: String(decoded.text || ''),
+          parsed: decoded.parsed,
+        };
+      }
+    } catch (_) {}
+  }
+
+  return { text: raw, parsed: null };
+}
 
 function sanitizeSessionId(value) {
   if (!value) return '';
@@ -133,8 +230,8 @@ function renderQr(url) {
 
   new window.QRCode(qrCode, {
     text: url,
-    width: 224,
-    height: 224,
+    width: 280,
+    height: 280,
     colorDark: '#000000',
     colorLight: '#ffffff',
     correctLevel: window.QRCode.CorrectLevel.M
@@ -200,9 +297,11 @@ async function initDesktop() {
       return;
     }
 
-    if (data.formattedText && data.formattedText !== desktopOutput.value) {
-      desktopOutput.value = data.formattedText;
-      copyDesktopButton.disabled = false;
+    if (data.formattedText) {
+      const incoming = readLabResult(data.formattedText);
+      desktopFallbackText = incoming.text;
+      desktopParsedResult = incoming.parsed;
+      renderDesktopResult();
     }
 
     if (data.status === 'result') {
@@ -282,8 +381,36 @@ async function sendResultToPc(text) {
 }
 
 window.addEventListener('labscan:result', event => {
-  const text = event.detail?.text || '';
-  if (text) sendResultToPc(text);
+  const payload = serializeLabResult(event.detail || {});
+  if (payload) sendResultToPc(payload);
+});
+
+compactModeButton?.addEventListener('click', () => {
+  formatPreferences.layout = 'compact';
+  saveFormatPreferences();
+  syncFormatControls();
+  renderDesktopResult();
+});
+
+expandedModeButton?.addEventListener('click', () => {
+  formatPreferences.layout = 'expanded';
+  saveFormatPreferences();
+  syncFormatControls();
+  renderDesktopResult();
+});
+
+abbreviationsToggle?.addEventListener('click', () => {
+  formatPreferences.abbreviations = !formatPreferences.abbreviations;
+  saveFormatPreferences();
+  syncFormatControls();
+  renderDesktopResult();
+});
+
+uppercaseToggle?.addEventListener('click', () => {
+  formatPreferences.uppercase = !formatPreferences.uppercase;
+  saveFormatPreferences();
+  syncFormatControls();
+  renderDesktopResult();
 });
 
 copyDesktopButton?.addEventListener('click', async () => {
@@ -303,6 +430,8 @@ copyDesktopButton?.addEventListener('click', async () => {
 });
 
 async function start() {
+  syncFormatControls();
+
   if (!isFirebaseConfigured()) {
     showOnly(configView);
     return;
