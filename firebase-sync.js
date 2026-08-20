@@ -18,7 +18,7 @@ import {
   firebaseConfig,
   labScanConfig,
   isFirebaseConfigured
-} from './firebase-config.js?v=8';
+} from './firebase-config.js?v=9';
 
 const desktopView = document.getElementById('desktopView');
 const mobileView = document.getElementById('mobileView');
@@ -28,6 +28,8 @@ const mobileStatus = document.getElementById('mobileStatus');
 const desktopOutput = document.getElementById('desktopOutput');
 const copyDesktopButton = document.getElementById('copyDesktopButton');
 const qrCode = document.getElementById('qrCode');
+const desktopPairCode = document.getElementById('desktopPairCode');
+const mobilePairCode = document.getElementById('mobilePairCode');
 
 const params = new URLSearchParams(location.search);
 const requestedSessionId = sanitizeSessionId(params.get('session'));
@@ -72,6 +74,24 @@ function randomSessionId() {
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '');
+}
+
+// Código visual de 4 dígitos derivado del ID de sesión. No es una credencial:
+// sirve únicamente para que el usuario confirme que PC y móvil muestran el mismo vínculo.
+function pairCodeFromSession(sessionId) {
+  let hash = 2166136261;
+  for (let i = 0; i < sessionId.length; i++) {
+    hash ^= sessionId.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const code = 1000 + ((hash >>> 0) % 9000);
+  return String(code);
+}
+
+function showPairCode(element, sessionId) {
+  if (!element || !sessionId) return;
+  element.textContent = `Código ${pairCodeFromSession(sessionId)}`;
+  element.hidden = false;
 }
 
 function waitForAuthUser() {
@@ -169,6 +189,7 @@ async function initDesktop() {
   }, cleanupDelay);
 
   renderQr(buildMobileUrl(currentSessionId));
+  showPairCode(desktopPairCode, currentSessionId);
   setDesktopStatus('Escanea el QR con el teléfono');
 
   stopSessionListener = onValue(currentSessionRef, snapshot => {
@@ -213,6 +234,7 @@ async function claimMobileSession() {
     updatedAt: serverTimestamp()
   });
 
+  showPairCode(mobilePairCode, currentSessionId);
   setMobileStatus('Vinculado al PC');
 
   stopSessionListener = onValue(currentSessionRef, snapshot => {

@@ -67,6 +67,24 @@ h1 span {
   height: auto !important;
 }
 
+
+.pair-code {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pair-code-mobile {
+  width: max-content;
+  margin: -12px 0 12px;
+}
+
 .status {
   min-height: 20px;
   margin: 0;

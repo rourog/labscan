@@ -14,12 +14,69 @@
   let files = [];
   let worker = null;
   let tesseractLoader = null;
+  let activeRecognitionProgress = null;
+
+  const STRUCTURE_BANDS = 4;
+  const RESULT_BANDS = 4;
+  const STRUCTURE_PASS_WEIGHT = 1.0;
+  const RESULT_PASS_WEIGHT = 0.45;
 
   function setAnalyzeState() {
     analyzeButton.disabled = files.length === 0;
     analyzeButton.textContent = files.length > 1
       ? `Analizar datos · ${files.length}`
       : 'Analizar datos';
+  }
+
+  function createAnalysisProgress(pageCount) {
+    const pages = Math.max(1, pageCount);
+    const weightPerPage =
+      STRUCTURE_BANDS * STRUCTURE_PASS_WEIGHT +
+      RESULT_BANDS * RESULT_PASS_WEIGHT;
+    const totalWeight = pages * weightPerPage;
+    let completedWeight = 0;
+    let currentWeight = 0;
+    let lastPercent = 0;
+
+    const render = value => {
+      const percent = Math.max(lastPercent, Math.min(100, Math.round(value)));
+      lastPercent = percent;
+      analyzeButton.textContent = `Analizando · ${percent}%`;
+    };
+
+    return {
+      start() {
+        render(0);
+      },
+      workerReady() {
+        // Preparación del motor representa el primer 5% del flujo total.
+        render(5);
+      },
+      beginPass(weight) {
+        currentWeight = weight;
+        activeRecognitionProgress = progress => {
+          const fraction = (completedWeight + currentWeight * progress) / totalWeight;
+          render(5 + fraction * 90);
+        };
+      },
+      finishPass() {
+        completedWeight += currentWeight;
+        currentWeight = 0;
+        activeRecognitionProgress = null;
+        render(5 + (completedWeight / totalWeight) * 90);
+      },
+      parsing() {
+        activeRecognitionProgress = null;
+        render(97);
+      },
+      complete() {
+        activeRecognitionProgress = null;
+        render(100);
+      },
+      cancel() {
+        activeRecognitionProgress = null;
+      }
+    };
   }
 
   function openFilePicker(input) {
@@ -62,13 +119,13 @@
     return tesseractLoader;
   }
 
-  async function getWorker(onProgress) {
+  async function getWorker() {
     if (worker) return worker;
     const Tesseract = await loadTesseract();
     worker = await Tesseract.createWorker('spa', 1, {
       logger: message => {
         if (message.status === 'recognizing text' && Number.isFinite(message.progress)) {
-          onProgress(message.progress);
+          activeRecognitionProgress?.(Math.max(0, Math.min(1, message.progress)));
         }
       }
     });
@@ -365,11 +422,17 @@
         Boolean(options.enhance)
       );
 
-      const result = await ocrWorker.recognize(
-        prepared.canvas,
-        { rotateAuto: false },
-        { text: true, tsv: true }
-      );
+      options.progress?.beginPass(options.passWeight || 1);
+      let result;
+      try {
+        result = await ocrWorker.recognize(
+          prepared.canvas,
+          { rotateAuto: false },
+          { text: true, tsv: true }
+        );
+      } finally {
+        options.progress?.finishPass();
+      }
       const words = parseTsvWords(result?.data?.tsv || '', {
         scaleX: prepared.scale,
         scaleY: prepared.scale,
@@ -459,7 +522,7 @@
     return lines.join('\n');
   }
 
-  async function recognizePage(ocrWorker, file) {
+  async function recognizePage(ocrWorker, file, progress) {
     const base = await fileToBaseCanvas(file);
 
     // PASO 1: estructura. Franjas horizontales reducen memoria y hacen el texto
@@ -474,7 +537,7 @@
       base,
       0,
       base.width,
-      { bandCount: 4, targetWidth: 2350, keyPrefix: 's' }
+      { bandCount: STRUCTURE_BANDS, targetWidth: 2350, keyPrefix: 's', progress, passWeight: STRUCTURE_PASS_WEIGHT }
     );
     const structureRows = wordsToVisualRows(structureWords);
 
@@ -487,7 +550,7 @@
       base,
       resultColumn.left,
       resultWidth,
-      { bandCount: 4, targetWidth: 1000, enhance: true, keyPrefix: 'r' }
+      { bandCount: RESULT_BANDS, targetWidth: 1000, enhance: true, keyPrefix: 'r', progress, passWeight: RESULT_PASS_WEIGHT }
     );
     const resultRows = wordsToVisualRows(resultWords)
       .filter(row => row.cy >= resultColumn.headerY - 10);
@@ -520,20 +583,19 @@
     analyzeButton.disabled = true;
     output.value = '';
 
+    const progress = createAnalysisProgress(total);
+    progress.start();
+
     try {
-      const ocrWorker = await getWorker(progress => {
-        const percent = Math.round(progress * 100);
-        analyzeButton.textContent = `Analizando · ${percent}%`;
-      });
+      const ocrWorker = await getWorker();
+      progress.workerReady();
 
       const pages = [];
       for (let index = 0; index < total; index++) {
-        analyzeButton.textContent = total > 1
-          ? `Analizando ${index + 1}/${total}`
-          : 'Analizando';
-        pages.push(await recognizePage(ocrWorker, batch[index]));
+        pages.push(await recognizePage(ocrWorker, batch[index], progress));
       }
 
+      progress.parsing();
       const formatted = formatOCR(pages.join('\n\n'));
       output.value = formatted || 'No se reconocieron datos de laboratorio con el formato conocido.';
       if (formatted) {
@@ -542,7 +604,10 @@
         }));
       }
       files = [];
+      progress.complete();
+      await new Promise(resolve => setTimeout(resolve, 350));
     } catch (error) {
+      progress.cancel();
       console.error(error);
       output.value = `Error: ${error.message}`;
     } finally {
