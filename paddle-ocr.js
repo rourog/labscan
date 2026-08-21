@@ -1,5 +1,5 @@
 /*
- * LabScan — PaddleOCR adapter v12.3
+ * LabScan — PaddleOCR adapter v12.4
  * OCR en navegador con PP-OCRv6 + reconstrucción geométrica de tabla.
  */
 (function (root, factory) {

@@ -280,10 +280,9 @@ h1 {
 .copy-button:hover:not(:disabled) { border-color: var(--gold); }
 
 .format-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 9px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
   margin-bottom: 12px;
   padding: 12px;
   border: 1px solid var(--border-soft);
@@ -293,6 +292,7 @@ h1 {
 
 .format-group {
   display: grid;
+  min-width: 0;
   gap: 6px;
 }
 
@@ -306,8 +306,9 @@ h1 {
 }
 
 .segmented-control {
-  display: inline-grid;
-  grid-template-columns: 1fr 1fr;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
   padding: 3px;
   border: 1px solid var(--border-soft);
   border-radius: 11px;
@@ -315,41 +316,56 @@ h1 {
 }
 
 .segment {
-  min-height: 34px;
-  padding: 0 11px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 9px;
   border: 0;
   border-radius: 8px;
   background: transparent;
   color: var(--muted);
-  font-size: .75rem;
+  font-size: .72rem;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.segment:hover:not(.is-active) {
+  color: var(--text);
+  background: rgba(255, 255, 255, .025);
 }
 
 .segment.is-active {
-  background: var(--surface-soft);
-  color: var(--text);
-}
-
-.format-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 11px;
-  background: transparent;
-  color: var(--muted);
-  font-size: .73rem;
-  font-weight: 700;
-}
-
-.format-chip .ui-icon { width: 18px; height: 18px; }
-
-.format-chip.is-active {
-  border-color: rgba(199, 163, 90, .4);
   background: var(--gold-soft);
   color: var(--gold-bright);
+  box-shadow: inset 0 0 0 1px rgba(199, 163, 90, .22);
+}
+
+.capture-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 10px 2px 0;
+  color: var(--muted-2);
+  font-size: .69rem;
+  line-height: 1.45;
+}
+
+.capture-disclaimer::before {
+  content: "i";
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border: 1px solid rgba(199, 163, 90, .3);
+  border-radius: 50%;
+  color: var(--gold);
+  font-size: .59rem;
+  font-weight: 800;
+}
+
+.capture-disclaimer-mobile {
+  margin-top: 9px;
 }
 
 textarea {
@@ -480,10 +496,9 @@ code { color: var(--gold-bright); }
   .results-header { align-items: flex-start; }
   .copy-button { min-width: 42px; padding: 0 10px; }
   .copy-button > span:last-child { display: none; }
-  .format-toolbar { align-items: stretch; }
+  .format-toolbar { grid-template-columns: 1fr; }
   .format-group { width: 100%; }
   .segmented-control { width: 100%; }
-  .format-chip { flex: 1 1 calc(50% - 5px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -492,7 +507,7 @@ code { color: var(--gold-bright); }
 
 
 /* ==========================================================
-   Progreso compacto dentro del botón — v12.3
+   Progreso compacto dentro del botón — v12.4
    ========================================================== */
 .analyze-action {
   --analyze-progress: 0%;

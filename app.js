@@ -199,7 +199,7 @@
   async function registerOcrCacheWorker() {
     if (!('serviceWorker' in navigator)) return;
     try {
-      await navigator.serviceWorker.register('./sw.js?v=12.3', { scope: './' });
+      await navigator.serviceWorker.register('./sw.js?v=12.4', { scope: './' });
       await Promise.race([
         navigator.serviceWorker.ready,
         new Promise(resolve => setTimeout(resolve, 1200)),
@@ -369,7 +369,7 @@
 
       const result = parseAndFormat(rawText);
       output.value = result.formatted || 'No se reconocieron datos de laboratorio con el formato conocido.';
-      console.info('[LabScan OCR v12.3]', debug);
+      console.info('[LabScan OCR v12.4]', debug);
 
       files = [];
 

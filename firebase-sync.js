@@ -18,7 +18,7 @@ import {
   firebaseConfig,
   labScanConfig,
   isFirebaseConfigured
-} from './firebase-config.js?v=10.0';
+} from './firebase-config.js?v=12.4';
 
 const desktopView = document.getElementById('desktopView');
 const mobileView = document.getElementById('mobileView');
@@ -32,8 +32,10 @@ const desktopPairCode = document.getElementById('desktopPairCode');
 const mobilePairCode = document.getElementById('mobilePairCode');
 const compactModeButton = document.getElementById('compactModeButton');
 const expandedModeButton = document.getElementById('expandedModeButton');
-const abbreviationsToggle = document.getElementById('abbreviationsToggle');
-const uppercaseToggle = document.getElementById('uppercaseToggle');
+const abbreviatedModeButton = document.getElementById('abbreviatedModeButton');
+const completeModeButton = document.getElementById('completeModeButton');
+const normalCaseButton = document.getElementById('normalCaseButton');
+const uppercaseModeButton = document.getElementById('uppercaseModeButton');
 
 const params = new URLSearchParams(location.search);
 const requestedSessionId = sanitizeSessionId(params.get('session'));
@@ -83,8 +85,10 @@ function setToggleState(button, active) {
 function syncFormatControls() {
   setToggleState(compactModeButton, formatPreferences.layout === 'compact');
   setToggleState(expandedModeButton, formatPreferences.layout === 'expanded');
-  setToggleState(abbreviationsToggle, formatPreferences.abbreviations);
-  setToggleState(uppercaseToggle, formatPreferences.uppercase);
+  setToggleState(abbreviatedModeButton, formatPreferences.abbreviations);
+  setToggleState(completeModeButton, !formatPreferences.abbreviations);
+  setToggleState(normalCaseButton, !formatPreferences.uppercase);
+  setToggleState(uppercaseModeButton, formatPreferences.uppercase);
 }
 
 function renderDesktopResult() {
@@ -403,15 +407,29 @@ expandedModeButton?.addEventListener('click', () => {
   renderDesktopResult();
 });
 
-abbreviationsToggle?.addEventListener('click', () => {
-  formatPreferences.abbreviations = !formatPreferences.abbreviations;
+abbreviatedModeButton?.addEventListener('click', () => {
+  formatPreferences.abbreviations = true;
   saveFormatPreferences();
   syncFormatControls();
   renderDesktopResult();
 });
 
-uppercaseToggle?.addEventListener('click', () => {
-  formatPreferences.uppercase = !formatPreferences.uppercase;
+completeModeButton?.addEventListener('click', () => {
+  formatPreferences.abbreviations = false;
+  saveFormatPreferences();
+  syncFormatControls();
+  renderDesktopResult();
+});
+
+normalCaseButton?.addEventListener('click', () => {
+  formatPreferences.uppercase = false;
+  saveFormatPreferences();
+  syncFormatControls();
+  renderDesktopResult();
+});
+
+uppercaseModeButton?.addEventListener('click', () => {
+  formatPreferences.uppercase = true;
   saveFormatPreferences();
   syncFormatControls();
   renderDesktopResult();

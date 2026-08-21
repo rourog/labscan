@@ -14,7 +14,7 @@ Durante el análisis, el propio botón muestra la etapa activa y el progreso glo
 
 ## Formato
 
-En escritorio se puede alternar entre vista reducida o expandida, abreviaturas o nombres completos y mayúsculas. Los valores y unidades se conservan al cambiar la presentación.
+En escritorio se puede alternar entre vista compacta o expandida, nombres abreviados o completos y capitalización normal o en mayúsculas. Los valores y unidades se conservan al cambiar la presentación.
 
 ## Despliegue
 
@@ -22,4 +22,4 @@ El proyecto está preparado para GitHub Pages y utiliza Firebase Authentication 
 
 ## Aviso
 
-El reconocimiento automático puede cometer errores. Los resultados deben verificarse contra el documento original antes de incorporarlos a una nota médica o utilizarlos para decisiones clínicas.
+Debido a que la captura de datos es automatizada, se recomienda que el usuario verifique los resultados contra el documento original antes de incorporarlos a una nota médica o utilizarlos para decisiones clínicas.

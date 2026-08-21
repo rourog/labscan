@@ -1,5 +1,5 @@
-/* LabScan v12.3 — cache persistente de recursos OCR públicos. */
-const CACHE_NAME = 'labscan-ocr-assets-v12.3';
+/* LabScan v12.4 — cache persistente de recursos OCR públicos. */
+const CACHE_NAME = 'labscan-ocr-assets-v12.4';
 
 function shouldCache(request) {
   if (request.method !== 'GET') return false;

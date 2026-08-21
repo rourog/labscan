@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="preconnect" href="https://esm.sh" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=12.3">
+  <link rel="stylesheet" href="styles.css?v=12.4">
 </head>
 <body>
   <main class="app">
@@ -22,7 +22,7 @@
       </div>
       <h1>LabScan</h1>
       <p class="brand-byline">by Rourog</p>
-      <span class="brand-version">v12.3</span>
+      <span class="brand-version">v12.4</span>
     </header>
 
     <!-- Escritorio: URL sin ?session= -->
@@ -67,20 +67,26 @@
             <div class="format-group">
               <span class="format-label">Vista</span>
               <div class="segmented-control" role="group" aria-label="Vista de resultados">
-                <button id="compactModeButton" class="segment is-active" type="button" aria-pressed="true">Reducida</button>
-                <button id="expandedModeButton" class="segment" type="button" aria-pressed="false">Expandida</button>
+                <button id="compactModeButton" class="segment is-active" type="button" aria-pressed="true">Compacto</button>
+                <button id="expandedModeButton" class="segment" type="button" aria-pressed="false">Expandido</button>
               </div>
             </div>
 
-            <button id="abbreviationsToggle" class="format-chip is-active" type="button" aria-pressed="true">
-              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14M5 12h10M5 16h7"/></svg>
-              Abreviaturas
-            </button>
+            <div class="format-group">
+              <span class="format-label">Nombres</span>
+              <div class="segmented-control" role="group" aria-label="Nombres de analitos">
+                <button id="abbreviatedModeButton" class="segment is-active" type="button" aria-pressed="true">Abreviado</button>
+                <button id="completeModeButton" class="segment" type="button" aria-pressed="false">Completo</button>
+              </div>
+            </div>
 
-            <button id="uppercaseToggle" class="format-chip" type="button" aria-pressed="false">
-              <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h9M9.5 6v12M6.5 18h6M16 10h4M18 10v8M16.5 18h3"/></svg>
-              MAYÚSCULAS
-            </button>
+            <div class="format-group">
+              <span class="format-label">Texto</span>
+              <div class="segmented-control" role="group" aria-label="Capitalización del texto">
+                <button id="normalCaseButton" class="segment is-active" type="button" aria-pressed="true">Normal</button>
+                <button id="uppercaseModeButton" class="segment" type="button" aria-pressed="false">MAYÚSCULAS</button>
+              </div>
+            </div>
           </div>
 
           <textarea
@@ -91,6 +97,10 @@
             spellcheck="false"
             readonly
           ></textarea>
+
+          <p class="capture-disclaimer">
+            Debido a que la captura de datos es automatizada, se recomienda que el usuario verifique los resultados contra el documento original.
+          </p>
         </article>
       </div>
     </section>
@@ -132,6 +142,10 @@
           placeholder="Los datos procesados aparecerán aquí."
           spellcheck="false"
         ></textarea>
+
+        <p class="capture-disclaimer capture-disclaimer-mobile">
+          Debido a que la captura de datos es automatizada, se recomienda que el usuario verifique los resultados contra el documento original.
+        </p>
       </article>
     </section>
 
@@ -146,9 +160,9 @@
 
   <!-- El QR se genera localmente. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="lab-parser.js?v=12.3"></script>
-  <script src="paddle-ocr.js?v=12.3"></script>
-  <script src="app.js?v=12.3"></script>
-  <script type="module" src="firebase-sync.js?v=12.3"></script>
+  <script src="lab-parser.js?v=12.4"></script>
+  <script src="paddle-ocr.js?v=12.4"></script>
+  <script src="app.js?v=12.4"></script>
+  <script type="module" src="firebase-sync.js?v=12.4"></script>
 </body>
 </html>
