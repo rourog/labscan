@@ -5,12 +5,16 @@ LabScan es una herramienta web para digitalizar resultados de laboratorio impres
 ## Uso
 
 1. Abre `https://rourog.github.io/labscan/` en la PC.
-2. Escanea el QR con el teléfono y confirma que el código de vínculo coincida en ambas pantallas.
+2. Escanea el QR con el teléfono y verifica que el código de vínculo coincida.
 3. Toma una fotografía o selecciona una imagen.
 4. Pulsa **Analizar datos**.
 5. Revisa el resultado recibido en la PC y pulsa **Copiar**.
 
-La primera lectura en un dispositivo puede tardar más mientras se cargan los recursos de reconocimiento.
+## Procesamiento
+
+Durante el análisis se muestra una barra de progreso con las etapas principales: carga del OCR, preparación de imagen, extracción de texto, reconstrucción de tabla, interpretación, formato y envío.
+
+Cuando una operación externa no informa un porcentaje interno exacto, LabScan muestra la etapa activa y el tiempo transcurrido en lugar de inventar un avance.
 
 ## Formato de salida
 
@@ -20,11 +24,7 @@ En escritorio se puede cambiar la presentación sin repetir el escaneo:
 - Abreviaturas o nombres completos.
 - Conversión a mayúsculas.
 
-Los valores y sus unidades se conservan al cambiar la presentación.
-
-## Privacidad
-
-El reconocimiento de la fotografía se realiza en el navegador. La imagen no se guarda en Firebase; la sesión sincroniza únicamente los datos procesados.
+Las unidades se conservan en todos los modos.
 
 ## Despliegue
 

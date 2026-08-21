@@ -367,6 +367,7 @@ async function sendResultToPc(text) {
   }
 
   setMobileStatus('Enviando al PC…');
+  window.dispatchEvent(new CustomEvent('labscan:sync-state', { detail: { state: 'sending' } }));
   try {
     await update(currentSessionRef, {
       formattedText: clean,
@@ -374,9 +375,12 @@ async function sendResultToPc(text) {
       updatedAt: serverTimestamp()
     });
     setMobileStatus('Enviado al PC');
+    window.dispatchEvent(new CustomEvent('labscan:sync-state', { detail: { state: 'sent' } }));
   } catch (error) {
     console.error(error);
-    setMobileStatus(firebaseMessage(error));
+    const message = firebaseMessage(error);
+    setMobileStatus(message);
+    window.dispatchEvent(new CustomEvent('labscan:sync-state', { detail: { state: 'error', message } }));
   }
 }
 

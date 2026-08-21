@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=12.0">
+  <link rel="stylesheet" href="styles.css?v=12.2">
 </head>
 <body>
   <main class="app">
@@ -20,7 +20,7 @@
       </div>
       <h1>LabScan</h1>
       <p class="brand-byline">by Rourog</p>
-      <span class="brand-version">v12.0</span>
+      <span class="brand-version">v12.2</span>
     </header>
 
     <!-- Escritorio: URL sin ?session= -->
@@ -119,6 +119,37 @@
         <input id="cameraInput" class="file-input" type="file" accept="image/*" capture="environment">
         <input id="uploadInput" class="file-input" type="file" accept="image/*" multiple>
 
+        <section id="processingPanel" class="processing-panel" aria-live="polite" hidden>
+          <div class="processing-summary">
+            <div>
+              <span class="processing-kicker">Procesamiento</span>
+              <strong id="progressStage">Preparando análisis</strong>
+            </div>
+            <span id="progressPercent" class="progress-percent">0%</span>
+          </div>
+
+          <div id="progressTrack" class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div id="progressFill" class="progress-fill"></div>
+          </div>
+
+          <div class="processing-meta">
+            <span id="progressDetail">Esperando…</span>
+            <span id="progressElapsed" class="progress-elapsed">0 s</span>
+          </div>
+
+          <ol id="progressSteps" class="progress-steps">
+            <li data-progress-step="files"><span class="step-dot"></span><span>Archivos recibidos</span><small>5%</small></li>
+            <li data-progress-step="library"><span class="step-dot"></span><span>Biblioteca OCR</span><small>10%</small></li>
+            <li data-progress-step="model"><span class="step-dot"></span><span>Modelo PP-OCRv6</span><small>25%</small></li>
+            <li data-progress-step="image"><span class="step-dot"></span><span>Preparar imagen</span><small>35%</small></li>
+            <li data-progress-step="ocr"><span class="step-dot"></span><span>Extraer texto</span><small>72%</small></li>
+            <li data-progress-step="geometry"><span class="step-dot"></span><span>Reconstruir tabla</span><small>82%</small></li>
+            <li data-progress-step="parse"><span class="step-dot"></span><span>Interpretar datos</span><small>90%</small></li>
+            <li data-progress-step="format"><span class="step-dot"></span><span>Dar formato</span><small>96%</small></li>
+            <li data-progress-step="sync"><span class="step-dot"></span><span>Enviar al PC</span><small>100%</small></li>
+          </ol>
+        </section>
+
         <textarea
           id="output"
           class="mobile-output"
@@ -140,9 +171,9 @@
 
   <!-- El QR se genera localmente. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="lab-parser.js?v=12.0"></script>
-  <script src="paddle-ocr.js?v=12.0"></script>
-  <script src="app.js?v=12.0"></script>
-  <script type="module" src="firebase-sync.js?v=12.0"></script>
+  <script src="lab-parser.js?v=12.2"></script>
+  <script src="paddle-ocr.js?v=12.2"></script>
+  <script src="app.js?v=12.2"></script>
+  <script type="module" src="firebase-sync.js?v=12.2"></script>
 </body>
 </html>

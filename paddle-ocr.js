@@ -1,5 +1,5 @@
 /*
- * LabScan — PaddleOCR adapter v12
+ * LabScan — PaddleOCR adapter v12.2
  * OCR en navegador con PP-OCRv6 + reconstrucción geométrica de tabla.
  */
 (function (root, factory) {
@@ -59,48 +59,55 @@
     return sdkPromise;
   }
 
+  function withTimeout(promise, ms, message) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  }
+
   async function initialize(onStage) {
     if (ocrInstance) return ocrInstance;
     if (ocrPromise) return ocrPromise;
 
     ocrPromise = (async () => {
-      onStage?.('Cargando motor OCR', 4);
+      onStage?.('Cargando biblioteca OCR');
       const mod = await loadSDK();
+      onStage?.('Biblioteca OCR lista');
       const PaddleOCR = mod?.PaddleOCR;
       if (!PaddleOCR?.create) throw new Error('El SDK PaddleOCR no expuso PaddleOCR.create().');
 
-      onStage?.('Preparando modelos PP-OCRv6', 8);
+      // v12.1: tiny es el modelo primario en móvil. El par det+rec pesa
+      // aproximadamente 6.3 MB frente a ~30 MB del small, por lo que evita
+      // dejar la interfaz aparentemente congelada durante la inicialización.
+      onStage?.('Descargando modelo OCR ligero (~6 MB)');
+
+      const createTiny = PaddleOCR.create({
+        textDetectionModelName: 'PP-OCRv6_tiny_det',
+        textRecognitionModelName: 'PP-OCRv6_tiny_rec',
+        textDetectionBatchSize: 1,
+        textRecognitionBatchSize: 2,
+        ortOptions: {
+          backend: 'wasm',
+          wasmPaths: ORT_WASM_PATH,
+          numThreads: 1,
+          simd: true,
+        },
+      });
+
       try {
-        ocrInstance = await PaddleOCR.create({
-          lang: 'es',
-          ocrVersion: 'PP-OCRv6',
-          textDetectionBatchSize: 1,
-          textRecognitionBatchSize: 4,
-          ortOptions: {
-            backend: 'wasm',
-            wasmPaths: ORT_WASM_PATH,
-            numThreads: 1,
-            simd: true,
-          },
-        });
-      } catch (smallError) {
-        // Un fallback ligero permite que teléfonos con poca memoria sigan siendo utilizables.
-        console.warn('[LabScan] PP-OCRv6 small no inició; probando tiny.', smallError);
-        onStage?.('Probando modelo ligero', 8);
-        ocrInstance = await PaddleOCR.create({
-          textDetectionModelName: 'PP-OCRv6_tiny_det',
-          textRecognitionModelName: 'PP-OCRv6_tiny_rec',
-          textDetectionBatchSize: 1,
-          textRecognitionBatchSize: 4,
-          ortOptions: {
-            backend: 'wasm',
-            wasmPaths: ORT_WASM_PATH,
-            numThreads: 1,
-            simd: true,
-          },
-        });
+        ocrInstance = await withTimeout(
+          createTiny,
+          75000,
+          'PaddleOCR tardó demasiado en cargar el modelo ligero. Recarga la página y verifica la conexión.'
+        );
+      } catch (tinyError) {
+        console.error('[LabScan] No se pudo iniciar PP-OCRv6 tiny.', tinyError);
+        throw tinyError;
       }
-      onStage?.('Motor OCR listo', 15);
+
+      onStage?.('Motor OCR listo');
       return ocrInstance;
     })().catch(error => {
       ocrPromise = null;
@@ -449,10 +456,11 @@
 
   async function recognizeFile(file, options = {}) {
     const ocr = await initialize(options.onStage);
-    options.onStage?.('Preparando imagen', options.progressBase ?? 15);
+    options.onStage?.('Preparando imagen');
     const canvas = await fileToCanvas(file, options.targetLongEdge || 2600);
     try {
-      options.onStage?.('Reconociendo documento', options.progressBase ?? 15);
+      options.onStage?.('Imagen preparada');
+      options.onStage?.('Extrayendo texto');
       const results = await ocr.predict(canvas, {
         textDetLimitSideLen: 2200,
         textDetLimitType: 'max',
@@ -461,7 +469,11 @@
       });
       const result = results?.[0];
       if (!result) throw new Error('PaddleOCR no devolvió resultados para la imagen.');
-      return buildParserText(result);
+      options.onStage?.('Texto extraído');
+      options.onStage?.('Reconstruyendo tabla');
+      const built = buildParserText(result);
+      options.onStage?.('Tabla reconstruida');
+      return built;
     } finally {
       canvas.width = 1;
       canvas.height = 1;
