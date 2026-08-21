@@ -18,9 +18,9 @@
   let activeRecognitionProgress = null;
 
   const STRUCTURE_BANDS = 4;
-  const RESULT_BANDS = 4;
+  const RESULT_CELL_CHUNKS = 2;
   const STRUCTURE_PASS_WEIGHT = 1.0;
-  const RESULT_PASS_WEIGHT = 0.45;
+  const RESULT_PASS_WEIGHT = 0.65;
 
   function setAnalyzeLabel(text) {
     if (analyzeButtonLabel) analyzeButtonLabel.textContent = text;
@@ -38,7 +38,7 @@
     const pages = Math.max(1, pageCount);
     const weightPerPage =
       STRUCTURE_BANDS * STRUCTURE_PASS_WEIGHT +
-      RESULT_BANDS * RESULT_PASS_WEIGHT;
+      RESULT_CELL_CHUNKS * RESULT_PASS_WEIGHT;
     const totalWeight = pages * weightPerPage;
     let completedWeight = 0;
     let currentWeight = 0;
@@ -463,69 +463,193 @@
 
     if (!header) {
       return {
-        left: Math.round(width * 0.42),
-        right: Math.round(width * 0.68),
+        left: Math.round(width * 0.43),
+        right: Math.round(width * 0.64),
         headerY: 0,
       };
     }
 
     const sameBand = word => Math.abs(word.cy - header.cy) < Math.max(20, header.height * 3.0);
-    const ref = words
+    const refCandidates = words
       .filter(word => sameBand(word) && word.left > header.right && ['VALOR', 'REFERENCIA'].includes(normalizeToken(word.text)))
-      .sort((a, b) => a.left - b.left)[0];
+      .sort((a, b) => a.left - b.left);
+    const ref = refCandidates[0];
     const study = words
       .filter(word => sameBand(word) && word.right < header.left && normalizeToken(word.text) === 'ESTUDIO')
       .sort((a, b) => b.right - a.right)[0];
 
     const cx = header.left + header.width / 2;
-    let left;
-    let right;
+    let left = study
+      ? Math.round((study.right + header.left) / 2)
+      : Math.round(cx - width * 0.11);
 
-    if (study) left = Math.round(((study.left + study.width / 2) + cx) / 2);
-    else if (ref) left = Math.round(cx - ((ref.left + ref.width / 2) - cx) * 0.58);
-    else left = Math.round(cx - width * 0.12);
+    // En RASOMA la columna de referencia está bastante separada. Usamos su
+    // borde izquierdo real cuando existe, en vez del centro del encabezado,
+    // para no contaminar el OCR de RESULTADO con 4.5–11, 23–45, etc.
+    let right = ref
+      ? Math.round(ref.left - width * 0.018)
+      : Math.round(cx + width * 0.12);
 
-    if (ref) right = Math.round((cx + (ref.left + ref.width / 2)) / 2);
-    else right = Math.round(cx + width * 0.14);
+    left = Math.max(0, left - Math.round(width * 0.012));
+    right = Math.min(width, right);
 
-    left = Math.max(0, left - Math.round(width * 0.015));
-    right = Math.min(width, right + Math.round(width * 0.025));
-    if (right - left < width * 0.12) {
-      left = Math.max(0, Math.round(cx - width * 0.13));
-      right = Math.min(width, Math.round(cx + width * 0.16));
+    // Límites conservadores si el encabezado salió deformado por perspectiva.
+    const minWidth = Math.round(width * 0.14);
+    const maxWidth = Math.round(width * 0.28);
+    if (right - left < minWidth) {
+      left = Math.max(0, Math.round(cx - width * 0.10));
+      right = Math.min(width, Math.round(cx + width * 0.10));
+    } else if (right - left > maxWidth) {
+      left = Math.max(0, Math.round(cx - width * 0.11));
+      right = Math.min(width, Math.round(cx + width * 0.13));
     }
 
     return { left, right, headerY: header.bottom };
   }
 
-  function mergeResultRows(structureRows, resultRows) {
-    if (!resultRows.length) return structureRows.map(row => row.text).join('\n');
-    const used = new Set();
-    const lines = [];
+  function splitEvenly(items, chunkCount) {
+    const count = Math.max(1, Math.min(chunkCount, items.length || 1));
+    const chunks = [];
+    for (let i = 0; i < count; i++) {
+      const start = Math.floor(items.length * i / count);
+      const end = Math.floor(items.length * (i + 1) / count);
+      chunks.push(items.slice(start, end));
+    }
+    return chunks;
+  }
 
-    for (const row of structureRows) {
-      let bestIndex = -1;
-      let bestDistance = Infinity;
-      const tolerance = Math.max(10, row.height * 1.1);
+  function buildResultCellCanvas(baseCanvas, structureRows, resultColumn) {
+    if (!structureRows.length) return null;
 
-      for (let i = 0; i < resultRows.length; i++) {
-        if (used.has(i)) continue;
-        const candidate = resultRows[i];
-        const distance = Math.abs(candidate.cy - row.cy);
-        if (distance <= tolerance && distance < bestDistance) {
-          bestIndex = i;
-          bestDistance = distance;
+    const typicalHeight = Math.max(8, median(structureRows.map(row => row.height).filter(Number.isFinite)));
+    const sourceWidth = Math.max(1, resultColumn.right - resultColumn.left);
+    const targetWidth = 900;
+    const scale = Math.max(1.7, Math.min(3.3, targetWidth / sourceWidth));
+    const sidePadding = 24;
+    const topPadding = 18;
+    const bottomPadding = 18;
+    const gap = 30;
+
+    const cells = structureRows.map((row, sourceIndex) => {
+      // La altura del texto del analito y la del resultado no siempre coincide.
+      // Este margen absorbe inclinación de la hoja sin alcanzar la fila vecina.
+      const half = Math.max(typicalHeight * 0.78, row.height * 0.80);
+      const y1 = Math.max(0, Math.round(row.cy - half));
+      const y2 = Math.min(baseCanvas.height, Math.round(row.cy + half));
+      const sourceHeight = Math.max(1, y2 - y1);
+      const drawnHeight = Math.max(28, Math.round(sourceHeight * scale));
+      return { row, sourceIndex, y1, sourceHeight, drawnHeight };
+    });
+
+    const canvasWidth = Math.round(sourceWidth * scale) + sidePadding * 2;
+    const canvasHeight = cells.reduce((sum, cell) => sum + cell.drawnHeight + topPadding + bottomPadding + gap, gap);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, canvasWidth);
+    canvas.height = Math.max(1, canvasHeight);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('No se pudo preparar la lectura de resultados.');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    let cursorY = gap;
+    const mapping = [];
+    for (const cell of cells) {
+      const contentTop = cursorY + topPadding;
+      ctx.drawImage(
+        baseCanvas,
+        resultColumn.left, cell.y1, sourceWidth, cell.sourceHeight,
+        sidePadding, contentTop, Math.round(sourceWidth * scale), cell.drawnHeight
+      );
+
+      mapping.push({
+        sourceIndex: cell.sourceIndex,
+        top: cursorY,
+        bottom: contentTop + cell.drawnHeight + bottomPadding,
+        contentTop,
+        contentBottom: contentTop + cell.drawnHeight,
+      });
+      cursorY = contentTop + cell.drawnHeight + bottomPadding + gap;
+    }
+
+    enhanceNumericCanvas(canvas);
+    return { canvas, mapping };
+  }
+
+  function wordsByMappedCell(words, mapping) {
+    const result = new Map();
+    for (const map of mapping) {
+      const cellWords = words
+        .filter(word => word.cy >= map.top && word.cy < map.bottom)
+        .sort((a, b) => a.left - b.left);
+      if (!cellWords.length) continue;
+
+      // Una celda puede contener ruido de la línea punteada. Conservamos solo
+      // texto reconocido y dejamos que el parser valide número + unidad.
+      const text = cellWords.map(word => word.text).join(' ').replace(/\s+/g, ' ').trim();
+      if (text) result.set(map.sourceIndex, text);
+    }
+    return result;
+  }
+
+  async function recognizeResultCells(ocrWorker, baseCanvas, structureRows, resultColumn, progress) {
+    const eligible = structureRows
+      .map((row, index) => ({ ...row, sourceIndex: index }))
+      .filter(row => row.cy >= resultColumn.headerY - 6);
+
+    const chunks = splitEvenly(eligible, RESULT_CELL_CHUNKS);
+    const refined = new Map();
+
+    await ocrWorker.setParameters({
+      preserve_interword_spaces: '1',
+      user_defined_dpi: '350',
+      tessedit_pageseg_mode: '6',
+    });
+
+    for (const chunk of chunks) {
+      progress?.beginPass(RESULT_PASS_WEIGHT);
+      try {
+        if (!chunk.length) continue;
+        const built = buildResultCellCanvas(baseCanvas, chunk, resultColumn);
+        if (!built) continue;
+        let result;
+        try {
+          result = await ocrWorker.recognize(
+            built.canvas,
+            { rotateAuto: false },
+            { text: true, tsv: true }
+          );
+        } finally {
+          built.canvas.width = 1;
+          built.canvas.height = 1;
         }
-      }
 
-      if (bestIndex >= 0) {
-        used.add(bestIndex);
-        lines.push(`${row.text}   ${RESULT_MARKER} ${resultRows[bestIndex].text}`);
-      } else {
-        lines.push(row.text);
+        const words = parseTsvWords(result?.data?.tsv || '', { keyPrefix: 'cell' });
+        const local = wordsByMappedCell(words, built.mapping);
+        for (const [localIndex, text] of local) {
+          const sourceIndex = chunk[localIndex]?.sourceIndex;
+          if (Number.isInteger(sourceIndex)) refined.set(sourceIndex, text);
+        }
+      } finally {
+        progress?.finishPass();
       }
     }
-    return lines.join('\n');
+
+    // Restaurar PSM disperso para la siguiente página.
+    await ocrWorker.setParameters({
+      preserve_interword_spaces: '1',
+      user_defined_dpi: '300',
+      tessedit_pageseg_mode: '11',
+    });
+    return refined;
+  }
+
+  function mergeResultCells(structureRows, refinedByRow) {
+    return structureRows.map((row, index) => {
+      const refined = refinedByRow.get(index);
+      return refined ? `${row.text}   ${RESULT_MARKER} ${refined}` : row.text;
+    }).join('\n');
   }
 
   async function recognizePage(ocrWorker, file, progress) {
@@ -547,21 +671,19 @@
     );
     const structureRows = wordsToVisualRows(structureWords);
 
-    // PASO 2: solo columna RESULTADO. La ampliamos más y aplicamos un unsharp
-    // suave para recuperar puntos decimales pequeños sin tocar los rangos.
+    // PASO 2: la columna RESULTADO ya no se OCRiza como una lista independiente.
+    // Construimos una celda por cada fila detectada y mantenemos un mapa exacto
+    // fila→celda. Esto evita desplazamientos como Na←Cl, Glucosa←Urea o Eri←Hb.
     const resultColumn = findResultColumn(structureWords, base.width);
-    const resultWidth = Math.max(1, resultColumn.right - resultColumn.left);
-    const resultWords = await recognizeBanded(
+    const refinedByRow = await recognizeResultCells(
       ocrWorker,
       base,
-      resultColumn.left,
-      resultWidth,
-      { bandCount: RESULT_BANDS, targetWidth: 1000, enhance: true, keyPrefix: 'r', progress, passWeight: RESULT_PASS_WEIGHT }
+      structureRows,
+      resultColumn,
+      progress
     );
-    const resultRows = wordsToVisualRows(resultWords)
-      .filter(row => row.cy >= resultColumn.headerY - 10);
 
-    const merged = mergeResultRows(structureRows, resultRows);
+    const merged = mergeResultCells(structureRows, refinedByRow);
     base.width = 1;
     base.height = 1;
     return merged;

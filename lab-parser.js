@@ -1,5 +1,5 @@
 /*
- * LabScan parser v10
+ * LabScan parser v11
  * Parser universal orientado a OCR.
  *
  * Cambios principales:
@@ -603,6 +603,69 @@
     });
   }
 
+  // Rangos deliberadamente amplios: no interpretan normalidad clínica.
+  // Solo bloquean lecturas OCR físicamente inverosímiles (p.ej. Hb 200000000009,
+  // VCM 921, K 136.6). Si una lectura refinada falla aquí, el parser intenta
+  // rescatar la misma fila del OCR estructural antes de aceptar otro dato.
+  const plausibilityRanges = {
+    'LEUCOCITOS': [0, 500],
+    'NEUTROFILOS': [0, 500],
+    'LINFOCITOS': [0, 500],
+    'MONOCITOS': [0, 500],
+    'EOSINOFILOS': [0, 500],
+    'BASOFILOS': [0, 500],
+    'ERITROCITOS': [0.1, 20],
+    'HEMOGLOBINA': [1, 30],
+    'HEMATOCRITO': [3, 80],
+    'VOLUMEN CORPUSCULAR MEDIO': [30, 160],
+    'HEMOGLOBINA CORPUSCULAR MEDIA': [10, 60],
+    'PLAQUETAS': [0, 3000],
+    'VOLUMEN PLAQUETAR MEDIO': [2, 30],
+    'GLUCOSA': [5, 3000],
+    'UREA': [1, 1000],
+    'CREATININA': [0.05, 50],
+    'ACIDO URICO': [0.1, 50],
+    'BILIRRUBINA TOTAL': [0, 100],
+    'BILIRRUBINA DIRECTA': [0, 100],
+    'BILIRRUBINA INDIRECTA': [0, 100],
+    'OXALACETICA': [0, 100000],
+    'PIRUVICA': [0, 100000],
+    'FOSFATASA ALCALINA': [0, 100000],
+    'GAMAGLUTAMIL TRANSFERASA': [0, 100000],
+    'LACTICA': [0, 100000],
+    'AMILASA': [0, 100000],
+    'LIPASA': [0, 100000],
+    'SODIO': [80, 200],
+    'POTASIO': [1, 10],
+    'CLORO': [50, 180],
+    'CALCIO': [1, 25],
+    'FOSFORO': [0.1, 30],
+    'MAGNESIO': [0.1, 20],
+    'TIEMPO DE PROTOMBINA': [1, 1000],
+    'TIEMPO DE TROMBOPLASTINA PARCIAL': [1, 1000],
+    'INR': [0.1, 30],
+    'DENSIDAD_ORINA': [1.0, 1.2],
+    'PH_ORINA': [2, 12],
+    'LEUCOCITOS_ORINA': [0, 100000],
+    'ERITROCITOS_ORINA': [0, 100000],
+  };
+
+  function numericValue(value) {
+    const cleaned = String(value ?? '').replace(/[<>]/g, '').replace(',', '.').trim();
+    if (!/^-?\d+(?:\.\d+)?$/.test(cleaned)) return null;
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function isPlausibleMeasurement(def, measurement) {
+    if (!measurement || measurement.value == null) return false;
+    const range = plausibilityRanges[def.key];
+    if (!range) return true;
+    const n = numericValue(measurement.value);
+    if (n === null) return false;
+    return n >= range[0] && n <= range[1];
+  }
+
   function extractMeasurement(tail, def) {
     if (def.qualitative || def.urineOnly) {
       const qualitative = extractQualitative(tail);
@@ -611,24 +674,51 @@
 
     const candidates = extractMeasurements(tail);
     if (candidates.length) {
-      // Preferir SIEMPRE el número que está pegado a una unidad compatible.
-      // Así "NEUTROFILOS # 4 12.4 x10e3/uL 1.5-7.5" -> 12.4, no 4.
-      const byUnit = candidates.find(candidate => unitMatches(candidate, def));
-      const chosen = byUnit || candidates[0];
-      const forceCanonicalCountUnit = [
-        'LEUCOCITOS','NEUTROFILOS','LINFOCITOS','MONOCITOS','EOSINOFILOS','BASOFILOS','ERITROCITOS','PLAQUETAS'
-      ].includes(def.key);
+      // Primero resultados con unidad compatible. Un rango de referencia suele
+      // carecer de unidad, por lo que no debe desplazar al resultado real.
+      const ordered = [...candidates].sort((a, b) => {
+        const au = unitMatches(a, def) ? 2 : (a.rawUnit ? 1 : 0);
+        const bu = unitMatches(b, def) ? 2 : (b.rawUnit ? 1 : 0);
+        return bu - au || a.index - b.index;
+      });
 
-      return {
-        value: chosen.value,
-        unit: forceCanonicalCountUnit ? (def.unit || chosen.unit || '') : (chosen.unit || def.unit || ''),
-        quality: byUnit ? 5 : (chosen.rawUnit ? 4 : 2),
-      };
+      for (const chosen of ordered) {
+        const matchedUnit = unitMatches(chosen, def);
+        // Para analitos conocidos mostramos siempre la unidad canónica. Esto
+        // evita que OCR "U/L" como "UL" termine convertido en microlitros.
+        const measurement = {
+          value: chosen.value,
+          unit: def.unit || chosen.unit || '',
+          quality: matchedUnit ? 5 : (chosen.rawUnit ? 4 : 2),
+        };
+        if (isPlausibleMeasurement(def, measurement)) return measurement;
+
+        // Si la lectura que llevaba la unidad esperada es absurda, no tomamos
+        // silenciosamente el siguiente número de la fila (podría ser referencia).
+        if (matchedUnit) return null;
+      }
     }
 
     const qualitative = extractQualitative(tail);
     if (qualitative) return { value: qualitative, unit: '', quality: 4 };
     return null;
+  }
+
+  function decimalRestorationPreferred(structural, refined) {
+    const a = numericValue(structural?.value);
+    const b = numericValue(refined?.value);
+    if (a === null || b === null || a === b) return false;
+    const aText = String(structural.value);
+    const bText = String(refined.value);
+    if (aText.includes('.') && !bText.includes('.')) return false;
+    if (!bText.includes('.')) return false;
+
+    // Caso típico OCR: 0.9→09/9, 0.03→003/3. Comparamos potencias de diez.
+    const large = Math.max(Math.abs(a), Math.abs(b));
+    const small = Math.max(Number.EPSILON, Math.min(Math.abs(a), Math.abs(b)));
+    const ratio = large / small;
+    const powers = [10, 100, 1000, 10000];
+    return powers.some(power => Math.abs(ratio - power) / power < 0.03);
   }
 
   function extractValueFromRow(row, def) {
@@ -641,21 +731,43 @@
       const tail = cleanTail(row.text.slice(match.index + match[0].length));
       if (!tail) return { matched: true, measurement: null };
 
-      // v6: si la app hizo una segunda lectura exclusiva de la columna RESULTADO,
-      // ese dato tiene prioridad sobre el OCR general de la fila. Así evitamos
-      // que 91.2 termine como 921 o que se tome un número del rango de referencia.
       const refinedIndex = tail.indexOf('§RESULT§');
+      const structuralTail = refinedIndex >= 0
+        ? cleanTail(tail.slice(0, refinedIndex))
+        : tail;
+      const structural = extractMeasurement(structuralTail, def);
+
+      let refined = null;
       if (refinedIndex >= 0) {
         const refinedTail = cleanTail(tail.slice(refinedIndex + '§RESULT§'.length));
-        const refined = extractMeasurement(refinedTail, def);
-        if (refined) {
-          refined.quality = Math.max(9, (refined.quality || 1) + 4);
-          return { matched: true, measurement: refined };
-        }
+        refined = extractMeasurement(refinedTail, def);
       }
 
-      const measurement = extractMeasurement(tail, def);
-      return { matched: true, measurement };
+      if (structural && refined) {
+        // Si la segunda lectura restaura explícitamente un punto decimal perdido
+        // (09→0.9, 003→0.03), la preferimos. No se inventa el decimal: debe estar
+        // presente en el OCR de la celda aislada y conservar plausibilidad.
+        if (decimalRestorationPreferred(structural, refined)) {
+          refined.quality = Math.max(10, (refined.quality || 1) + 5);
+          return { matched: true, measurement: refined };
+        }
+
+        // Una medición estructural con la unidad esperada sigue siendo muy fuerte.
+        // Esto protege contra un eventual OCR de celda desplazado o contaminado.
+        if ((structural.quality || 0) >= 5) {
+          structural.quality = Math.max(8, structural.quality + 3);
+          return { matched: true, measurement: structural };
+        }
+
+        refined.quality = Math.max(9, (refined.quality || 1) + 4);
+        return { matched: true, measurement: refined };
+      }
+
+      if (refined) {
+        refined.quality = Math.max(9, (refined.quality || 1) + 4);
+        return { matched: true, measurement: refined };
+      }
+      return { matched: true, measurement: structural };
     }
     return { matched: false, measurement: null };
   }
