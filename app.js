@@ -5,177 +5,167 @@
   const uploadButton = document.getElementById('uploadButton');
   const analyzeButton = document.getElementById('analyzeButton');
   const analyzeButtonLabel = document.getElementById('analyzeButtonLabel');
+  const analyzeButtonPercent = document.getElementById('analyzeButtonPercent');
   const cameraInput = document.getElementById('cameraInput');
   const uploadInput = document.getElementById('uploadInput');
   const output = document.getElementById('output');
 
-  const processingPanel = document.getElementById('processingPanel');
-  const progressStage = document.getElementById('progressStage');
-  const progressPercent = document.getElementById('progressPercent');
-  const progressTrack = document.getElementById('progressTrack');
-  const progressFill = document.getElementById('progressFill');
-  const progressDetail = document.getElementById('progressDetail');
-  const progressElapsed = document.getElementById('progressElapsed');
-  const progressSteps = document.getElementById('progressSteps');
-
   let files = [];
   let preloadStarted = false;
   let engineReady = false;
+  let engineStage = 'idle';
   let isProcessing = false;
+  let awaitingSync = false;
+  let completionTimer = null;
 
   const STEP_TARGETS = {
-    files: 5,
-    library: 10,
-    model: 25,
-    image: 35,
+    files: 4,
+    library: 9,
+    model: 24,
+    image: 34,
     ocr: 72,
     geometry: 82,
     parse: 90,
     format: 96,
-    sync: 100,
+    sync: 99,
+  };
+
+  const STEP_STARTS = {
+    files: 1,
+    library: 5,
+    model: 10,
+    image: 25,
+    ocr: 35,
+    geometry: 73,
+    parse: 83,
+    format: 91,
+    sync: 97,
   };
 
   const STEP_LABELS = {
-    files: 'Archivos recibidos',
-    library: 'Cargando biblioteca OCR',
-    model: 'Inicializando PP-OCRv6',
-    image: 'Preparando imagen',
+    files: 'Preparando archivos',
+    library: 'Cargando biblioteca',
+    model: 'Cargando modelo',
+    image: 'Cargando imagen',
     ocr: 'Extrayendo texto',
-    geometry: 'Reconstruyendo tabla',
-    parse: 'Interpretando laboratorios',
+    geometry: 'Ordenando resultados',
+    parse: 'Interpretando datos',
     format: 'Dando formato',
     sync: 'Enviando al PC',
   };
 
-  class ProgressController {
+  class ButtonProgress {
     constructor() {
       this.percent = 0;
-      this.activeStep = null;
-      this.startedAt = 0;
-      this.timer = null;
-    }
-
-    getStepElement(step) {
-      return progressSteps?.querySelector(`[data-progress-step="${step}"]`) || null;
-    }
-
-    show() {
-      if (processingPanel) processingPanel.hidden = false;
-    }
-
-    startClock() {
-      if (this.startedAt) return;
-      this.startedAt = performance.now();
-      this.updateElapsed();
-      this.timer = window.setInterval(() => this.updateElapsed(), 1000);
-    }
-
-    stopClock() {
-      if (this.timer) window.clearInterval(this.timer);
-      this.timer = null;
-      this.updateElapsed();
-    }
-
-    updateElapsed() {
-      if (!progressElapsed || !this.startedAt) return;
-      const seconds = Math.max(0, Math.round((performance.now() - this.startedAt) / 1000));
-      progressElapsed.textContent = `${seconds} s`;
-    }
-
-    reset() {
-      this.stopClock();
-      this.percent = 0;
-      this.activeStep = null;
-      this.startedAt = 0;
-      if (progressSteps) {
-        for (const el of progressSteps.querySelectorAll('[data-progress-step]')) {
-          el.classList.remove('is-active', 'is-done', 'is-error');
-        }
-      }
-      this.setPercent(0);
-      if (progressStage) progressStage.textContent = 'Preparando análisis';
-      if (progressDetail) progressDetail.textContent = 'Selecciona una imagen para comenzar.';
-      if (progressElapsed) progressElapsed.textContent = '0 s';
-      processingPanel?.classList.remove('is-error', 'is-complete');
-      progressTrack?.classList.remove('is-busy');
+      this.active = false;
+      this.error = false;
     }
 
     setPercent(value) {
       const next = Math.max(this.percent, Math.min(100, Math.round(Number(value) || 0)));
       this.percent = next;
-      if (progressPercent) progressPercent.textContent = `${next}%`;
-      if (progressFill) progressFill.style.width = `${next}%`;
-      if (progressTrack) progressTrack.setAttribute('aria-valuenow', String(next));
-    }
-
-    setDetail(text) {
-      if (progressDetail && text) progressDetail.textContent = text;
-    }
-
-    activate(step, detail, options = {}) {
-      this.show();
-      this.startClock();
-      processingPanel?.classList.remove('is-error', 'is-complete');
-      if (this.activeStep && this.activeStep !== step) {
-        this.getStepElement(this.activeStep)?.classList.remove('is-active');
+      if (analyzeButtonPercent) {
+        analyzeButtonPercent.textContent = `${next}%`;
+        analyzeButtonPercent.hidden = !this.active;
       }
-      this.activeStep = step;
-      const el = this.getStepElement(step);
-      el?.classList.remove('is-error');
-      el?.classList.add('is-active');
-      if (progressStage) progressStage.textContent = options.title || STEP_LABELS[step] || 'Procesando';
-      if (detail) this.setDetail(detail);
-      progressTrack?.classList.toggle('is-busy', options.busy !== false);
+      analyzeButton?.style.setProperty('--analyze-progress', `${next}%`);
     }
 
-    complete(step, detail) {
-      this.show();
-      const el = this.getStepElement(step);
-      el?.classList.remove('is-active', 'is-error');
-      el?.classList.add('is-done');
-      if (this.activeStep === step) this.activeStep = null;
-      this.setPercent(STEP_TARGETS[step] || this.percent);
-      if (detail) this.setDetail(detail);
-      progressTrack?.classList.remove('is-busy');
+    setLabel(text) {
+      if (analyzeButtonLabel) analyzeButtonLabel.textContent = text;
     }
 
-    fail(step, message) {
-      this.show();
-      this.stopClock();
-      processingPanel?.classList.add('is-error');
-      progressTrack?.classList.remove('is-busy');
-      const target = step || this.activeStep;
-      if (target) {
-        const el = this.getStepElement(target);
-        el?.classList.remove('is-active');
-        el?.classList.add('is-error');
+    begin() {
+      this.active = true;
+      this.error = false;
+      this.percent = 0;
+      analyzeButton?.classList.add('is-processing');
+      analyzeButton?.classList.remove('is-complete', 'is-error');
+      if (analyzeButtonPercent) analyzeButtonPercent.hidden = false;
+      this.setPercent(1);
+    }
+
+    activate(step, detail) {
+      if (!this.active) this.begin();
+      this.setPercent(STEP_STARTS[step] ?? this.percent);
+      let label = STEP_LABELS[step] || 'Procesando';
+      if (detail && /hoja\s+\d+/i.test(detail)) {
+        const m = detail.match(/hoja\s+\d+(?:\s+de\s+\d+)?/i);
+        if (m) label += ` · ${m[0].replace(/^hoja/i, '').trim()}`;
       }
-      if (progressStage) progressStage.textContent = 'No se pudo completar';
-      if (message) this.setDetail(message);
+      this.setLabel(label);
     }
 
-    finish(detail = 'Datos procesados y enviados correctamente.') {
-      this.complete('sync', detail);
+    complete(step) {
+      if (!this.active) this.begin();
+      this.setPercent(STEP_TARGETS[step] ?? this.percent);
+    }
+
+    setDetail(detail) {
+      if (!detail || !this.active) return;
+      const m = String(detail).match(/(\d+)\/(\d+)/);
+      if (m && /Texto extraído/i.test(detail)) {
+        this.setLabel(`Extrayendo texto · ${m[1]}/${m[2]}`);
+      }
+    }
+
+    finish() {
+      if (completionTimer) clearTimeout(completionTimer);
+      this.active = true;
       this.setPercent(100);
-      this.stopClock();
-      processingPanel?.classList.add('is-complete');
-      if (progressStage) progressStage.textContent = 'Completado';
-      progressTrack?.classList.remove('is-busy');
+      this.setLabel('Completado');
+      analyzeButton?.classList.remove('is-processing', 'is-error');
+      analyzeButton?.classList.add('is-complete');
+      if (analyzeButtonPercent) analyzeButtonPercent.hidden = false;
+      completionTimer = setTimeout(() => {
+        this.reset();
+        setAnalyzeState();
+      }, 1600);
+    }
+
+    fail(message) {
+      this.active = true;
+      this.error = true;
+      this.setLabel('Error al procesar');
+      analyzeButton?.classList.remove('is-processing', 'is-complete');
+      analyzeButton?.classList.add('is-error');
+      if (analyzeButtonPercent) analyzeButtonPercent.hidden = false;
+      if (message) analyzeButton.title = message;
+    }
+
+    reset() {
+      this.active = false;
+      this.error = false;
+      this.percent = 0;
+      analyzeButton?.classList.remove('is-processing', 'is-complete', 'is-error');
+      analyzeButton?.style.setProperty('--analyze-progress', '0%');
+      analyzeButton?.removeAttribute('title');
+      if (analyzeButtonPercent) {
+        analyzeButtonPercent.textContent = '0%';
+        analyzeButtonPercent.hidden = true;
+      }
     }
   }
 
-  const progress = new ProgressController();
-  progress.reset();
+  const progress = new ButtonProgress();
 
   function setAnalyzeLabel(text) {
     if (analyzeButtonLabel) analyzeButtonLabel.textContent = text;
-    else if (analyzeButton) analyzeButton.textContent = text;
   }
 
   function setAnalyzeState() {
+    if (!analyzeButton) return;
     analyzeButton.disabled = isProcessing || files.length === 0;
-    if (isProcessing) setAnalyzeLabel('Procesando…');
-    else setAnalyzeLabel(files.length > 1 ? `Analizar datos · ${files.length}` : 'Analizar datos');
+    if (isProcessing || progress.active) return;
+    setAnalyzeLabel(files.length > 1 ? `Analizar datos · ${files.length}` : 'Analizar datos');
+  }
+
+  function releaseControls() {
+    isProcessing = false;
+    awaitingSync = false;
+    if (cameraButton) cameraButton.disabled = false;
+    if (uploadButton) uploadButton.disabled = false;
+    setAnalyzeState();
   }
 
   function openFilePicker(input) {
@@ -189,23 +179,33 @@
 
   function handleEngineStage(stage) {
     const text = String(stage || '');
-    if (/Cargando biblioteca/i.test(text)) {
-      progress.activate('library', 'Cargando el motor JavaScript de reconocimiento.', { busy: true });
-      return;
-    }
-    if (/Biblioteca OCR lista/i.test(text)) {
-      progress.complete('library', 'Biblioteca OCR cargada.');
-      return;
-    }
-    if (/Descargando modelo|modelo OCR/i.test(text)) {
-      progress.complete('library');
-      progress.activate('model', 'PP-OCRv6 tiny · primera carga ~6 MB. Esta etapa puede tardar más la primera vez.', { busy: true });
-      return;
-    }
-    if (/Motor OCR listo/i.test(text)) {
+    if (/Cargando biblioteca/i.test(text)) engineStage = 'library';
+    else if (/Biblioteca OCR lista/i.test(text)) engineStage = 'model';
+    else if (/Descargando modelo|modelo OCR/i.test(text)) engineStage = 'model';
+    else if (/Motor OCR listo/i.test(text)) {
+      engineStage = 'ready';
       engineReady = true;
+    }
+
+    if (!isProcessing) return;
+    if (engineStage === 'library') progress.activate('library');
+    if (engineStage === 'model') progress.activate('model');
+    if (engineStage === 'ready') {
       progress.complete('library');
-      progress.complete('model', 'Motor OCR listo para analizar.');
+      progress.complete('model');
+    }
+  }
+
+  async function registerOcrCacheWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      await navigator.serviceWorker.register('./sw.js?v=12.3', { scope: './' });
+      await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise(resolve => setTimeout(resolve, 1200)),
+      ]);
+    } catch (error) {
+      console.info('[LabScan] Cache OCR no disponible:', error?.message || error);
     }
   }
 
@@ -214,16 +214,29 @@
     preloadStarted = true;
     LabPaddleOCR.initialize(handleEngineStage).then(() => {
       engineReady = true;
-      progress.complete('library');
-      progress.complete('model', 'Motor OCR listo para analizar.');
-      if (!isProcessing) setAnalyzeState();
+      engineStage = 'ready';
+      if (isProcessing) {
+        progress.complete('library');
+        progress.complete('model');
+      }
     }).catch(error => {
       preloadStarted = false;
       engineReady = false;
+      engineStage = 'error';
       console.warn('[LabScan] Precarga OCR falló:', error);
-      progress.fail('model', error?.message || 'No se pudo cargar el motor OCR.');
-      if (!isProcessing) setAnalyzeState();
+      if (isProcessing) progress.fail(error?.message || 'No se pudo cargar el motor OCR.');
     });
+  }
+
+  function startBackgroundWarmup() {
+    const isMobileSession = new URLSearchParams(location.search).has('session');
+    if (!isMobileSession || !window.LabPaddleOCR) return;
+    const start = async () => {
+      await registerOcrCacheWorker();
+      warmUpOCR();
+    };
+    if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 900 });
+    else setTimeout(start, 350);
   }
 
   function addFiles(fileList) {
@@ -231,17 +244,9 @@
     if (!selected.length) return;
     files.push(...selected);
     output.value = '';
-
     progress.reset();
-    progress.show();
-    progress.startClock();
-    progress.complete('files', `${files.length} ${files.length === 1 ? 'imagen seleccionada' : 'imágenes seleccionadas'}.`);
-    if (engineReady) {
-      progress.complete('library');
-      progress.complete('model', 'Motor OCR ya estaba cargado.');
-    }
-
     setAnalyzeState();
+    // Normalmente el modelo ya se está precargando desde que se abrió el QR.
     warmUpOCR();
     cameraInput.value = '';
     uploadInput.value = '';
@@ -250,14 +255,14 @@
   function parseAndFormat(rawText) {
     if (!window.LabParser) throw new Error('No se cargó el intérprete de laboratorios.');
 
-    progress.activate('parse', 'Normalizando texto y buscando analitos conocidos.', { busy: true });
+    progress.activate('parse');
     const normalized = LabParser.normalizeOCR(rawText);
     const parsed = LabParser.parseLabResults(normalized);
-    progress.complete('parse', 'Datos de laboratorio interpretados.');
+    progress.complete('parse');
 
-    progress.activate('format', 'Construyendo la salida con valores y unidades.', { busy: true });
+    progress.activate('format');
     const formatted = LabParser.formatForClipboard(parsed);
-    progress.complete('format', 'Formato listo para copiar.');
+    progress.complete('format');
 
     return { parsed, formatted, normalized };
   }
@@ -271,27 +276,24 @@
     const pageLabel = `hoja ${index + 1} de ${total}`;
 
     if (/Preparando imagen/i.test(text)) {
-      if (index === 0) progress.activate('image', `Decodificando y ajustando resolución · ${pageLabel}.`, { busy: true });
-      else progress.activate('ocr', `Preparando ${pageLabel} antes del OCR.`, { busy: true });
+      progress.activate(index === 0 ? 'image' : 'ocr', pageLabel);
       return;
     }
     if (/Imagen preparada/i.test(text)) {
-      if (index === 0) progress.complete('image', `Imagen preparada para reconocimiento.`);
+      if (index === 0) progress.complete('image');
       return;
     }
     if (/Reconociendo documento|Extrayendo texto/i.test(text)) {
-      progress.activate('ocr', `PP-OCRv6 está leyendo ${pageLabel}. El tiempo depende de la resolución y del teléfono.`, { busy: true });
+      progress.activate('ocr', pageLabel);
       return;
     }
     if (/Texto extraído/i.test(text)) {
       progress.setPercent(ocrPercentForCompletedPages(index + 1, total));
-      progress.setDetail(`Texto extraído de ${index + 1}/${total} ${total === 1 ? 'hoja' : 'hojas'}.`);
+      progress.setDetail(`Texto extraído ${index + 1}/${total}`);
       return;
     }
     if (/Reconstruyendo tabla/i.test(text)) {
-      // La reconstrucción se realiza por hoja dentro del adaptador. La etapa global
-      // se consolida después de terminar todas las inferencias.
-      progress.setDetail(`Ordenando filas y columnas de ${pageLabel}.`);
+      progress.activate('geometry', pageLabel);
     }
   }
 
@@ -303,11 +305,17 @@
   window.addEventListener('labscan:sync-state', event => {
     const state = event.detail?.state;
     if (state === 'sending') {
-      progress.activate('sync', 'Transmitiendo únicamente los datos procesados a la sesión vinculada.', { busy: true });
+      awaitingSync = true;
+      progress.activate('sync');
+      progress.complete('sync');
     } else if (state === 'sent') {
-      progress.finish('Datos procesados y enviados al PC.');
+      awaitingSync = false;
+      progress.finish();
+      releaseControls();
     } else if (state === 'error') {
-      progress.fail('sync', event.detail?.message || 'Los datos se procesaron, pero no se pudieron enviar al PC.');
+      awaitingSync = false;
+      progress.fail(event.detail?.message || 'No se pudieron enviar los datos al PC.');
+      releaseControls();
     }
   });
 
@@ -321,22 +329,26 @@
     const batch = [...files];
     const total = batch.length;
     isProcessing = true;
-    cameraButton.disabled = true;
-    uploadButton.disabled = true;
-    setAnalyzeState();
+    awaitingSync = false;
+    if (cameraButton) cameraButton.disabled = true;
+    if (uploadButton) uploadButton.disabled = true;
     output.value = '';
-
-    progress.show();
-    progress.startClock();
-    progress.complete('files', `${total} ${total === 1 ? 'imagen lista' : 'imágenes listas'} para analizar.`);
+    progress.reset();
+    progress.begin();
+    progress.activate('files');
+    progress.complete('files');
+    setAnalyzeState();
 
     try {
       if (!engineReady) {
+        progress.activate(engineStage === 'model' ? 'model' : 'library');
+        // Si la precarga ya estaba en curso, initialize reutiliza la misma promesa.
         await LabPaddleOCR.initialize(handleEngineStage);
         engineReady = true;
+        engineStage = 'ready';
       }
       progress.complete('library');
-      progress.complete('model', 'PP-OCRv6 listo.');
+      progress.complete('model');
 
       const pages = [];
       const debug = [];
@@ -349,31 +361,28 @@
         progress.setPercent(ocrPercentForCompletedPages(index + 1, total));
       }
 
-      progress.complete('ocr', `OCR completado en ${total} ${total === 1 ? 'hoja' : 'hojas'}.`);
-      progress.activate('geometry', 'Consolidando filas, columnas y resultados detectados.', { busy: true });
+      progress.complete('ocr');
+      progress.activate('geometry');
       const rawText = pages.filter(Boolean).join('\n\n');
-      // La geometría por hoja ya se calculó en PaddleOCR; aquí consolidamos las páginas.
       await Promise.resolve();
-      progress.complete('geometry', 'Estructura documental reconstruida.');
+      progress.complete('geometry');
 
       const result = parseAndFormat(rawText);
       output.value = result.formatted || 'No se reconocieron datos de laboratorio con el formato conocido.';
+      console.info('[LabScan OCR v12.3]', debug);
 
-      console.info('[LabScan OCR v12.2]', debug);
+      files = [];
 
       if (result.formatted) {
-        progress.activate('sync', 'Esperando confirmación de Firebase…', { busy: true });
+        awaitingSync = true;
+        progress.activate('sync');
         window.dispatchEvent(new CustomEvent('labscan:result', {
           detail: { text: result.formatted, parsed: result.parsed }
         }));
       } else {
-        progress.setPercent(96);
-        progress.stopClock();
-        if (progressStage) progressStage.textContent = 'Análisis terminado';
-        progress.setDetail('No se encontraron resultados reconocibles para enviar.');
+        progress.finish();
+        releaseControls();
       }
-
-      files = [];
     } catch (error) {
       console.error(error);
       const detail = error?.message || String(error);
@@ -381,19 +390,17 @@
       if (/PaddleOCR|modelo|WASM|ONNX|fetch|network/i.test(detail)) {
         output.value += '\n\nLa primera ejecución descarga el motor y los modelos OCR. Verifica la conexión y vuelve a intentarlo.';
       }
-      progress.fail(null, detail);
+      progress.fail(detail);
+      releaseControls();
     } finally {
-      isProcessing = false;
-      cameraButton.disabled = false;
-      uploadButton.disabled = false;
-      setAnalyzeState();
+      if (!awaitingSync && isProcessing) releaseControls();
     }
   });
 
   window.addEventListener('pagehide', () => {
-    progress.stopClock();
     window.LabPaddleOCR?.dispose?.();
   });
 
   setAnalyzeState();
+  startBackgroundWarmup();
 })();

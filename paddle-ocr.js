@@ -1,5 +1,5 @@
 /*
- * LabScan — PaddleOCR adapter v12.2
+ * LabScan — PaddleOCR adapter v12.3
  * OCR en navegador con PP-OCRv6 + reconstrucción geométrica de tabla.
  */
 (function (root, factory) {
@@ -83,15 +83,22 @@
       // dejar la interfaz aparentemente congelada durante la inicialización.
       onStage?.('Descargando modelo OCR ligero (~6 MB)');
 
+      const nav = typeof navigator !== 'undefined' ? navigator : {};
+      const deviceMemory = Number(nav.deviceMemory || 0);
+      const hardwareThreads = Math.max(1, Number(nav.hardwareConcurrency || 1));
+      const canUseWasmThreads = Boolean(globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined');
+      const wasmThreads = canUseWasmThreads ? Math.min(4, hardwareThreads) : 1;
+      const recognitionBatch = deviceMemory >= 6 && hardwareThreads >= 6 ? 4 : 2;
+
       const createTiny = PaddleOCR.create({
         textDetectionModelName: 'PP-OCRv6_tiny_det',
         textRecognitionModelName: 'PP-OCRv6_tiny_rec',
         textDetectionBatchSize: 1,
-        textRecognitionBatchSize: 2,
+        textRecognitionBatchSize: recognitionBatch,
         ortOptions: {
           backend: 'wasm',
           wasmPaths: ORT_WASM_PATH,
-          numThreads: 1,
+          numThreads: wasmThreads,
           simd: true,
         },
       });
