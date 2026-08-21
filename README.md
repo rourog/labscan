@@ -10,6 +10,8 @@ LabScan es una herramienta web para digitalizar resultados de laboratorio impres
 4. Pulsa **Analizar datos**.
 5. Revisa el resultado recibido en la PC y pulsa **Copiar**.
 
+La primera lectura en un dispositivo puede tardar más mientras se cargan los recursos de reconocimiento.
+
 ## Formato de salida
 
 En escritorio se puede cambiar la presentación sin repetir el escaneo:
@@ -18,7 +20,11 @@ En escritorio se puede cambiar la presentación sin repetir el escaneo:
 - Abreviaturas o nombres completos.
 - Conversión a mayúsculas.
 
-Las unidades se conservan en todos los modos.
+Los valores y sus unidades se conservan al cambiar la presentación.
+
+## Privacidad
+
+El reconocimiento de la fotografía se realiza en el navegador. La imagen no se guarda en Firebase; la sesión sincroniza únicamente los datos procesados.
 
 ## Despliegue
 

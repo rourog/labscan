@@ -1,5 +1,5 @@
 /*
- * LabScan parser v11
+ * LabScan parser v12
  * Parser universal orientado a OCR.
  *
  * Cambios principales:
@@ -9,7 +9,7 @@
  * - Diferencia recuentos absolutos (#) de porcentajes (%) en la biometría.
  * - Conserva valor + unidad.
  * - Selecciona preferentemente el número asociado a la unidad esperada, evitando rangos de referencia.
- * - Compatible con filas reconstruidas desde TSV de Tesseract.
+ * - Compatible con filas estructuradas mediante geometría OCR y marcador de resultado.
  */
 
 (() => {
